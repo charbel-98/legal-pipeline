@@ -1,7 +1,6 @@
 from pathlib import PurePosixPath
 from urllib.parse import unquote, urlparse
 
-
 CONTENT_TYPE_EXTENSION_MAP = {
     "application/msword": "doc",
     "application/pdf": "pdf",
@@ -27,7 +26,9 @@ def build_object_name(
     )
     safe_body = body.lower().replace(" ", "_")
     safe_identifier = identifier.lower().replace("/", "_")
-    return str(PurePosixPath(source) / safe_body / partition_date / f"{safe_identifier}.{extension}")
+    return str(
+        PurePosixPath(source) / safe_body / partition_date / f"{safe_identifier}.{extension}"
+    )
 
 
 def infer_extension(

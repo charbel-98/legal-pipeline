@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import ClassVar
 from urllib.parse import urljoin, urlparse
 
 from scrapy import FormRequest, Request, Spider
@@ -8,12 +9,14 @@ from legal_pipeline.application.logging.logger import get_logger
 from legal_pipeline.application.services.search_plan_service import build_search_plans
 from legal_pipeline.domain.entities.search_criteria import SearchCriteria
 from legal_pipeline.infrastructure.scrapy_project.items import WorkplaceRelationsItem
-from legal_pipeline.infrastructure.scrapy_project.query_builder import WorkplaceRelationsQueryBuilder
+from legal_pipeline.infrastructure.scrapy_project.query_builder import (
+    WorkplaceRelationsQueryBuilder,
+)
 
 
 class WorkplaceRelationsSpider(Spider):
     name = "workplace_relations"
-    allowed_domains = ["workplacerelations.ie"]
+    allowed_domains: ClassVar[list[str]] = ["workplacerelations.ie"]
 
     def __init__(self, start_date: str, end_date: str, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
@@ -83,7 +86,9 @@ class WorkplaceRelationsSpider(Spider):
             if not detail_path:
                 continue
 
-            identifier = _resolve_identifier(raw_identifier=raw_identifier, detail_path=detail_path, title=title)
+            identifier = _resolve_identifier(
+                raw_identifier=raw_identifier, detail_path=detail_path, title=title
+            )
 
             yield Request(
                 url=urljoin(response.url, detail_path),
@@ -159,7 +164,9 @@ class WorkplaceRelationsSpider(Spider):
         item["source_page_url"] = partial_item["source_page_url"]
         item["document_url"] = partial_item["document_url"]
         item["file_name"] = detail_metadata["file_name"]
-        item["content_type"] = _normalize_content_type(response.headers.get("Content-Type")) or "text/html"
+        item["content_type"] = (
+            _normalize_content_type(response.headers.get("Content-Type")) or "text/html"
+        )
         item["content_bytes"] = None
         item["content_html"] = content_node
         item["storage_path"] = None
@@ -189,7 +196,10 @@ class WorkplaceRelationsSpider(Spider):
         item["source_page_url"] = partial_item["source_page_url"]
         item["document_url"] = response.url
         item["file_name"] = detail_metadata["file_name"]
-        item["content_type"] = _normalize_content_type(response.headers.get("Content-Type")) or "application/octet-stream"
+        item["content_type"] = (
+            _normalize_content_type(response.headers.get("Content-Type"))
+            or "application/octet-stream"
+        )
         item["content_bytes"] = bytes(response.body)
         item["content_html"] = None
         item["storage_path"] = None
@@ -303,7 +313,7 @@ def _file_name_from_response(response, fallback_url: str) -> str | None:
         for part in disposition.split(";"):
             part = part.strip()
             if part.lower().startswith("filename="):
-                return part.split("=", 1)[1].strip().strip("\"")
+                return part.split("=", 1)[1].strip().strip('"')
     return _extract_related_file_name(response) or _file_name_from_url(fallback_url)
 
 
@@ -314,7 +324,9 @@ def _file_name_from_url(url: str | None) -> str | None:
     return name or None
 
 
-def _resolve_identifier(raw_identifier: str | None, detail_path: str, title: str | None) -> str | None:
+def _resolve_identifier(
+    raw_identifier: str | None, detail_path: str, title: str | None
+) -> str | None:
     slug_identifier = _identifier_from_path(detail_path)
     if not raw_identifier:
         return slug_identifier or title
@@ -344,12 +356,15 @@ def _extract_detail_metadata(response, partial_item):
         }
     record_date = _extract_detail_record_date(response) or partial_item.get("record_date")
     return {
-        "title": _extract_detail_title(response) or partial_item.get("title") or partial_item["identifier"],
+        "title": _extract_detail_title(response)
+        or partial_item.get("title")
+        or partial_item["identifier"],
         "description": _extract_detail_description(response) or partial_item.get("description"),
         "case_number": _extract_case_number(response) or partial_item.get("case_number"),
         "record_date": record_date,
         "content_html": _extract_content_html(response),
-        "file_name": partial_item.get("file_name") or _file_name_from_response(response, response.url),
+        "file_name": partial_item.get("file_name")
+        or _file_name_from_response(response, response.url),
     }
 
 
@@ -390,7 +405,9 @@ def _extract_detail_record_date(response) -> str | None:
 def _try_parse_long_date(value: str | None) -> date | None:
     if not value:
         return None
-    normalized = value.replace("st ", " ").replace("nd ", " ").replace("rd ", " ").replace("th ", " ")
+    normalized = (
+        value.replace("st ", " ").replace("nd ", " ").replace("rd ", " ").replace("th ", " ")
+    )
     for fmt in ("%d %B %Y", "%d %b %Y"):
         try:
             return datetime.strptime(normalized, fmt).date()
@@ -408,7 +425,7 @@ def _extract_content_html(response) -> str | None:
     ]
     for selector in selectors:
         node = response.css(selector).get()
-        if node and len((_clean_text(response.css(f'{selector} ::text').getall()) or "")) >= 25:
+        if node and len(_clean_text(response.css(f"{selector} ::text").getall()) or "") >= 25:
             return node
     return response.css("div.content").get()
 
@@ -435,7 +452,9 @@ def _extract_related_file_name(response) -> str | None:
     for selector in selectors:
         value = _clean_text(response.css(selector).get())
         if value:
-            extension = _clean_text(response.css("div.related-item-content span.extension::text").get())
+            extension = _clean_text(
+                response.css("div.related-item-content span.extension::text").get()
+            )
             if extension and "." not in value:
                 return f"{value}.{extension.lower()}"
             return value

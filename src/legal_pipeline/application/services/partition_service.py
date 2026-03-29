@@ -32,4 +32,3 @@ def build_monthly_partitions(start_date: date, end_date: date) -> list[DateParti
         current = next_month
 
     return partitions
-

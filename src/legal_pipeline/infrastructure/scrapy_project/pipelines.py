@@ -4,8 +4,10 @@ from typing import Any
 try:
     from scrapy.exceptions import DropItem
 except ModuleNotFoundError:  # pragma: no cover - used only in lightweight unit tests
+
     class DropItem(Exception):
         pass
+
 
 from legal_pipeline.application.services.hash_service import sha256_bytes
 from legal_pipeline.domain.entities.record import DocumentRecord
@@ -163,6 +165,7 @@ class LandingZonePipeline:
     def _inc_stat(self, key: str) -> None:
         if self._crawler is not None:
             self._crawler.stats.inc_value(key)
+
 
 def _optional_str(value: Any) -> str | None:
     if value is None:

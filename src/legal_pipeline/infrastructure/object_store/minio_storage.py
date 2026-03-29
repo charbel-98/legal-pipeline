@@ -15,7 +15,9 @@ class MinioObjectStorage(ObjectStorage):
             secure=settings.minio_secure,
         )
 
-    def upload_bytes(self, bucket_name: str, object_name: str, payload: bytes, content_type: str) -> str:
+    def upload_bytes(
+        self, bucket_name: str, object_name: str, payload: bytes, content_type: str
+    ) -> str:
         self._client.put_object(
             bucket_name=bucket_name,
             object_name=object_name,
@@ -32,4 +34,3 @@ class MinioObjectStorage(ObjectStorage):
         finally:
             response.close()
             response.release_conn()
-

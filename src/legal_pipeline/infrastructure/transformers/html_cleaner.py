@@ -18,4 +18,3 @@ def extract_relevant_html(html: str) -> str:
 
     body = soup.find("body")
     return str(body if body is not None else soup)
-

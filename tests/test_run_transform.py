@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
-
 from legal_pipeline.application.services.record_serializer import serialize_record
 from legal_pipeline.application.use_cases.run_transform import run_transform, transform_record
 from legal_pipeline.domain.entities.record import DocumentRecord
@@ -28,7 +26,10 @@ def test_transform_record_cleans_html_and_writes_processed_output() -> None:
         "processed-zone/workplace_relations/labour_court/2024-01-01/lcr22912.html"
     )
     assert processed_record.scrape_status == "transformed"
-    assert object_storage.uploads[0]["payload"] == b"<main><article><p>Decision body</p></article></main>"
+    assert (
+        object_storage.uploads[0]["payload"]
+        == b"<main><article><p>Decision body</p></article></main>"
+    )
 
 
 def test_transform_record_passes_pdf_through_unchanged() -> None:
@@ -151,10 +152,14 @@ class FakeMetadataRepository:
         key = f"{record.source}:{record.body}:{record.identifier}"
         self.processed_records[key] = serialize_record(record)
 
-    def find_landing_records_by_date_range(self, start_date: str, end_date: str) -> list[dict[str, object]]:
+    def find_landing_records_by_date_range(
+        self, start_date: str, end_date: str
+    ) -> list[dict[str, object]]:
         return self.landing_records
 
-    def get_landing_record(self, source: str, body: str, identifier: str) -> dict[str, object] | None:
+    def get_landing_record(
+        self, source: str, body: str, identifier: str
+    ) -> dict[str, object] | None:
         return None
 
 
@@ -163,7 +168,9 @@ class FakeObjectStorage:
         self.objects = dict(objects)
         self.uploads: list[dict[str, object]] = []
 
-    def upload_bytes(self, bucket_name: str, object_name: str, payload: bytes, content_type: str) -> str:
+    def upload_bytes(
+        self, bucket_name: str, object_name: str, payload: bytes, content_type: str
+    ) -> str:
         self.uploads.append(
             {
                 "bucket_name": bucket_name,
@@ -181,4 +188,3 @@ class FakeObjectStorage:
 
 class FakeSettings:
     minio_processed_bucket = "processed-zone"
-

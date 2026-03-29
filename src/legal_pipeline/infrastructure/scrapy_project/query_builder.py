@@ -44,13 +44,17 @@ class WorkplaceRelationsQueryBuilder:
 
     def build_formdata(self, plan: SearchPlan) -> dict[str, str]:
         formdata = {
-            "ctl00$ContentPlaceHolder_Main$TextBox2": plan.partition.start_date.strftime("%d/%m/%Y"),
+            "ctl00$ContentPlaceHolder_Main$TextBox2": plan.partition.start_date.strftime(
+                "%d/%m/%Y"
+            ),
             "ctl00$ContentPlaceHolder_Main$TextBox3": plan.partition.end_date.strftime("%d/%m/%Y"),
             "ctl00$ContentPlaceHolder_Main$refine_btn": "",
         }
 
         if plan.criteria.body:
-            formdata[BODY_FORM_FIELD_BY_NAME[plan.criteria.body]] = BODY_CODE_BY_NAME[plan.criteria.body]
+            formdata[BODY_FORM_FIELD_BY_NAME[plan.criteria.body]] = BODY_CODE_BY_NAME[
+                plan.criteria.body
+            ]
 
         if plan.criteria.decision_number:
             formdata["ctl00$ContentPlaceHolder_Main$TextBox1"] = plan.criteria.decision_number

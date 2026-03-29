@@ -1,15 +1,14 @@
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True, slots=True)
 class SearchCriteria:
-    body: Optional[str] = None
-    case_number: Optional[str] = None
-    decision_number: Optional[str] = None
-    legislation: Optional[str] = None
-    topic: Optional[str] = None
-    keyword: Optional[str] = None
+    body: str | None = None
+    case_number: str | None = None
+    decision_number: str | None = None
+    legislation: str | None = None
+    topic: str | None = None
+    keyword: str | None = None
 
     def active_filters(self) -> dict[str, str]:
         return {
@@ -24,4 +23,3 @@ class SearchCriteria:
             }.items()
             if value
         }
-

@@ -17,4 +17,3 @@ def legal_pipeline_job() -> None:
 
 
 defs = Definitions(jobs=[legal_pipeline_job])
-

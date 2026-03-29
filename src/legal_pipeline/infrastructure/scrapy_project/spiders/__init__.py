@@ -1,2 +1,1 @@
 """Spiders package."""
-

@@ -1,5 +1,3 @@
-from typing import Optional
-
 import typer
 
 from legal_pipeline.application.config.settings import get_settings
@@ -18,14 +16,14 @@ def main() -> None:
 
 @app.command()
 def scrape(
-    start_date: Optional[str] = typer.Option(None, "--start-date"),
-    end_date: Optional[str] = typer.Option(None, "--end-date"),
-    body: Optional[str] = typer.Option(None, "--body"),
-    case_number: Optional[str] = typer.Option(None, "--case-number"),
-    decision_number: Optional[str] = typer.Option(None, "--decision-number"),
-    legislation: Optional[str] = typer.Option(None, "--legislation"),
-    topic: Optional[str] = typer.Option(None, "--topic"),
-    keyword: Optional[str] = typer.Option(None, "--keyword"),
+    start_date: str | None = typer.Option(None, "--start-date"),
+    end_date: str | None = typer.Option(None, "--end-date"),
+    body: str | None = typer.Option(None, "--body"),
+    case_number: str | None = typer.Option(None, "--case-number"),
+    decision_number: str | None = typer.Option(None, "--decision-number"),
+    legislation: str | None = typer.Option(None, "--legislation"),
+    topic: str | None = typer.Option(None, "--topic"),
+    keyword: str | None = typer.Option(None, "--keyword"),
 ) -> None:
     settings = get_settings()
     run_scrape(
@@ -42,8 +40,8 @@ def scrape(
 
 @app.command()
 def transform(
-    start_date: Optional[str] = typer.Option(None, "--start-date"),
-    end_date: Optional[str] = typer.Option(None, "--end-date"),
+    start_date: str | None = typer.Option(None, "--start-date"),
+    end_date: str | None = typer.Option(None, "--end-date"),
 ) -> None:
     settings = get_settings()
     run_transform(start_date or settings.default_start_date, end_date or settings.default_end_date)

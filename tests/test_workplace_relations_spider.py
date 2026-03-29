@@ -4,11 +4,11 @@ scrapy = pytest.importorskip("scrapy")
 from scrapy.http import HtmlResponse, Request, Response
 
 from legal_pipeline.infrastructure.scrapy_project.spiders.workplace_relations_spider import (
-    _extract_detail_metadata,
     _extract_attachment_href,
+    _extract_detail_metadata,
     _has_meaningful_html_content,
-    _resolve_identifier,
     _is_download_response,
+    _resolve_identifier,
 )
 
 
@@ -68,7 +68,10 @@ def test_extract_attachment_href_reads_related_file_downloads() -> None:
     )
 
     assert _has_meaningful_html_content(response) is False
-    assert _extract_attachment_href(response) == "/en/eat_import/2013/01/730e4ab5-ce82-4114-abd1-29e805b660ee.pdf"
+    assert (
+        _extract_attachment_href(response)
+        == "/en/eat_import/2013/01/730e4ab5-ce82-4114-abd1-29e805b660ee.pdf"
+    )
 
 
 def test_is_download_response_detects_pdf_by_header() -> None:
@@ -132,7 +135,9 @@ def test_extract_detail_metadata_enriches_related_file_pages() -> None:
 def test_extract_detail_metadata_uses_partial_item_for_binary_response() -> None:
     response = Response(
         url="https://www.workplacerelations.ie/en/eat_import/2013/01/730e4ab5-ce82-4114-abd1-29e805b660ee.pdf",
-        request=Request("https://www.workplacerelations.ie/en/eat_import/2013/01/730e4ab5-ce82-4114-abd1-29e805b660ee.pdf"),
+        request=Request(
+            "https://www.workplacerelations.ie/en/eat_import/2013/01/730e4ab5-ce82-4114-abd1-29e805b660ee.pdf"
+        ),
     )
 
     detail = _extract_detail_metadata(

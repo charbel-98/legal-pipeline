@@ -85,7 +85,9 @@ def test_landing_pipeline_retries_transient_storage_failures() -> None:
 
     assert item["scrape_status"] == "stored"
     assert object_storage.upload_count == 3
-    assert repository.records["workplace_relations:Labour Court:LCR22913"]["identifier"] == "LCR22913"
+    assert (
+        repository.records["workplace_relations:Labour Court:LCR22913"]["identifier"] == "LCR22913"
+    )
 
 
 def test_landing_pipeline_uploads_binary_payloads_with_original_filename() -> None:
@@ -113,8 +115,14 @@ def test_landing_pipeline_uploads_binary_payloads_with_original_filename() -> No
     assert object_storage.last_upload["object_name"].endswith("dec-e2001-001.pdf")
     assert object_storage.last_upload["payload"] == b"%PDF-1.7 fake payload"
     assert item["content_bytes"] is None
-    assert repository.records["workplace_relations:Labour Court:DEC-E2001-001"]["file_name"] == "full-case-report.pdf"
-    assert repository.records["workplace_relations:Labour Court:DEC-E2001-001"]["content_type"] == "application/pdf"
+    assert (
+        repository.records["workplace_relations:Labour Court:DEC-E2001-001"]["file_name"]
+        == "full-case-report.pdf"
+    )
+    assert (
+        repository.records["workplace_relations:Labour Court:DEC-E2001-001"]["content_type"]
+        == "application/pdf"
+    )
 
 
 def build_item(identifier: str) -> dict[str, str]:
@@ -153,7 +161,9 @@ class FakeMetadataRepository:
         key = self._build_key(record.source, record.body, record.identifier)
         self.records[key] = payload
 
-    def find_landing_records_by_date_range(self, start_date: str, end_date: str) -> list[dict[str, str]]:
+    def find_landing_records_by_date_range(
+        self, start_date: str, end_date: str
+    ) -> list[dict[str, str]]:
         return list(self.records.values())
 
     def get_landing_record(self, source: str, body: str, identifier: str) -> dict[str, str] | None:
@@ -169,7 +179,9 @@ class FakeObjectStorage:
         self.upload_count = 0
         self.last_upload: dict[str, object] | None = None
 
-    def upload_bytes(self, bucket_name: str, object_name: str, payload: bytes, content_type: str) -> str:
+    def upload_bytes(
+        self, bucket_name: str, object_name: str, payload: bytes, content_type: str
+    ) -> str:
         self.upload_count += 1
         if self.upload_count <= self.fail_upload_attempts:
             raise RuntimeError("transient upload failure")

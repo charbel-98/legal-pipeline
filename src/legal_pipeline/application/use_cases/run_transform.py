@@ -12,7 +12,10 @@ from legal_pipeline.domain.repositories.metadata_repository import MetadataRepos
 from legal_pipeline.domain.storage.object_storage import ObjectStorage
 from legal_pipeline.infrastructure.db.mongo_repository import MongoMetadataRepository
 from legal_pipeline.infrastructure.object_store.minio_storage import MinioObjectStorage
-from legal_pipeline.infrastructure.scrapy_project.object_naming import build_object_name, infer_extension
+from legal_pipeline.infrastructure.scrapy_project.object_naming import (
+    build_object_name,
+    infer_extension,
+)
 from legal_pipeline.infrastructure.transformers.html_cleaner import extract_relevant_html
 
 
@@ -148,7 +151,7 @@ def _normalize_record_payload(landing_record: dict[str, Any]) -> dict[str, Any]:
                 source_page_url="",
                 document_url="",
             )
-        ).keys()
+        )
     }
     payload["record_date"] = _parse_optional_date(payload.get("record_date"))
     return payload

@@ -1,7 +1,10 @@
 from dataclasses import dataclass
 from datetime import date
 
-from legal_pipeline.application.services.partition_service import DatePartition, build_monthly_partitions
+from legal_pipeline.application.services.partition_service import (
+    DatePartition,
+    build_monthly_partitions,
+)
 from legal_pipeline.domain.entities.search_criteria import SearchCriteria
 
 SUPPORTED_BODIES = (
@@ -44,4 +47,3 @@ def build_search_plans(
             )
 
     return plans
-

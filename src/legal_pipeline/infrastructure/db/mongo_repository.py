@@ -23,9 +23,15 @@ class MongoMetadataRepository(MetadataRepository):
             ("identifier", ASCENDING),
         ]
         self._landing_collection.create_index(identity_index, unique=True, name="landing_identity")
-        self._processed_collection.create_index(identity_index, unique=True, name="processed_identity")
-        self._landing_collection.create_index([("partition_date", ASCENDING)], name="landing_partition_date")
-        self._landing_collection.create_index([("record_date", ASCENDING)], name="landing_record_date")
+        self._processed_collection.create_index(
+            identity_index, unique=True, name="processed_identity"
+        )
+        self._landing_collection.create_index(
+            [("partition_date", ASCENDING)], name="landing_partition_date"
+        )
+        self._landing_collection.create_index(
+            [("record_date", ASCENDING)], name="landing_record_date"
+        )
         self._landing_collection.create_index([("file_hash", ASCENDING)], name="landing_file_hash")
 
     def upsert_landing_record(self, record: DocumentRecord) -> None:
@@ -42,7 +48,9 @@ class MongoMetadataRepository(MetadataRepository):
             upsert=True,
         )
 
-    def find_landing_records_by_date_range(self, start_date: str, end_date: str) -> list[dict[str, Any]]:
+    def find_landing_records_by_date_range(
+        self, start_date: str, end_date: str
+    ) -> list[dict[str, Any]]:
         cursor = self._landing_collection.find(
             {"partition_date": {"$gte": start_date, "$lte": end_date}}
         )

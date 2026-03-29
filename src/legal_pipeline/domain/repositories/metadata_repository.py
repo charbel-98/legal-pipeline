@@ -18,7 +18,9 @@ class MetadataRepository(ABC):
         """Insert or update a processed metadata record."""
 
     @abstractmethod
-    def find_landing_records_by_date_range(self, start_date: str, end_date: str) -> list[dict[str, Any]]:
+    def find_landing_records_by_date_range(
+        self, start_date: str, end_date: str
+    ) -> list[dict[str, Any]]:
         """Fetch landing-zone records for transformation."""
 
     @abstractmethod

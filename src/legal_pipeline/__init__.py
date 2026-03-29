@@ -1,2 +1,1 @@
 """Legal pipeline package."""
-
