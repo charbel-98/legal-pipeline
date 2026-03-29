@@ -1,6 +1,6 @@
 # Legal Pipeline
 
-Starter project for the Workplace Relations scraping test. This repository is structured for a clean, scalable implementation with:
+Implementation for the Workplace Relations scraping test. This repository is structured for a clean, scalable pipeline with:
 
 - **Scrapy** for ingestion
 - **MongoDB** for metadata
@@ -70,7 +70,7 @@ Show available commands:
 poetry run legal-pipeline --help
 ```
 
-Planned commands:
+Available commands:
 
 - `legal-pipeline scrape`
 - `legal-pipeline transform`
@@ -85,28 +85,62 @@ Current scrape filters scaffolded in the CLI:
 - `--topic`
 - `--keyword`
 
-## What Is Already Scaffolded
+## What Is Implemented
 
 - clean architecture package layout
 - typed application settings
 - rich terminal logging for local runs, with JSON mode still available
-- MongoDB repository scaffold
-- MinIO storage scaffold
-- Scrapy project scaffold
-- live Workplace Relations result/detail parsing
-- landing-zone persistence to MongoDB and MinIO for HTML records
+- MongoDB repository for landing and processed metadata
+- MinIO object storage integration for landing and processed files
+- Scrapy crawler for the Workplace Relations search flow
+- live Workplace Relations result/detail parsing across all four supported bodies
+- landing-zone persistence to MongoDB and MinIO for HTML and PDF records
 - transformation service that reads landing records, cleans HTML, and writes processed outputs
 - Docker Compose infrastructure
 - Poetry-based dependency and virtualenv management
 
-## Next Implementation Steps
+## Example Workflow
 
-1. extend landing-zone handling to PDF/DOC downloads in addition to HTML pages
-2. enrich metadata extraction from detail pages
-3. verify a live DOC/DOCX example from the source site if one is exposed
-4. enrich processed metadata and reporting as needed
-5. emit stronger failure summaries and retry reporting for transform runs
-6. wire Dagster jobs for ingestion then transformation
+Run a small scrape:
+
+```bash
+poetry run legal-pipeline scrape --start-date 2024-01-01 --end-date 2024-01-31 --body "Labour Court"
+```
+
+Run transformation on a scraped range:
+
+```bash
+poetry run legal-pipeline transform --start-date 2024-01-01 --end-date 2024-01-31
+```
+
+Verify a PDF-backed transform range:
+
+```bash
+poetry run legal-pipeline transform --start-date 2013-01-01 --end-date 2013-01-31
+```
+
+That January 2013 range contains `Employment Appeals Tribunal` records with both inline HTML and downloadable PDFs, so it is a good end-to-end verification slice for the processed zone.
+
+## Validation So Far
+
+- scrape validated across:
+  - `Labour Court`
+  - `Workplace Relations Commission`
+  - `Equality Tribunal`
+  - `Employment Appeals Tribunal`
+- landing zone verified for:
+  - HTML records
+  - PDF records
+- transform verified for:
+  - live HTML cleaning
+  - live PDF passthrough
+
+## Remaining Work
+
+1. verify a live DOC/DOCX example from the source site if one is exposed
+2. enrich processed metadata and reporting where useful
+3. add stronger failure summaries and retry reporting for transform runs
+4. wire Dagster jobs for ingestion then transformation
 
 ## Logging
 
