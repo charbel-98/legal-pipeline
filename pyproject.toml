@@ -1,0 +1,53 @@
+[build-system]
+requires = ["poetry-core>=1.9.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry]
+name = "legal-pipeline"
+version = "0.1.0"
+description = "Scalable scraping pipeline for Workplace Relations legal documents"
+authors = ["Codex <codex@example.com>"]
+readme = "README.md"
+packages = [{ include = "legal_pipeline", from = "src" }]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.13"
+beautifulsoup4 = "^4.12.3"
+boto3 = "^1.35.0"
+click = ">=8.1,<8.2"
+dagster = "^1.9.0"
+minio = "^7.2.8"
+motor = "^3.6.0"
+pydantic = "^2.9.2"
+pydantic-settings = "^2.5.2"
+pymongo = "^4.9.1"
+python-dotenv = "^1.0.1"
+rich = "^13.9.4"
+scrapy = "^2.11.2"
+structlog = "^24.4.0"
+typer = "^0.12.5"
+
+[tool.poetry.group.dev.dependencies]
+mypy = "^1.11.2"
+pytest = "^8.3.3"
+pytest-cov = "^5.0.0"
+ruff = "^0.6.9"
+
+[tool.poetry.scripts]
+legal-pipeline = "legal_pipeline.interfaces.cli.main:app"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_return_any = true
+warn_unreachable = true
