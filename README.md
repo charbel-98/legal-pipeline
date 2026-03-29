@@ -5,7 +5,7 @@ Implementation for the Workplace Relations scraping test. This repository is str
 - **Scrapy** for ingestion
 - **MongoDB** for metadata
 - **MinIO** for object storage
-- **Dagster** scaffolding for orchestration
+- **Dagster** job orchestration
 - **BeautifulSoup** for HTML transformation
 
 ## Project Structure
@@ -113,6 +113,12 @@ Run transformation on a scraped range:
 poetry run legal-pipeline transform --start-date 2024-01-01 --end-date 2024-01-31
 ```
 
+Run the full pipeline through Dagster orchestration:
+
+```bash
+poetry run legal-pipeline orchestrate --start-date 2024-01-01 --end-date 2024-01-31 --body "Labour Court"
+```
+
 Verify a PDF-backed transform range:
 
 ```bash
@@ -120,6 +126,35 @@ poetry run legal-pipeline transform --start-date 2013-01-01 --end-date 2013-01-3
 ```
 
 That January 2013 range contains `Employment Appeals Tribunal` records with both inline HTML and downloadable PDFs, so it is a good end-to-end verification slice for the processed zone.
+
+## Dagster Orchestration
+
+For day-to-day local usage, the simplest orchestration entrypoint is:
+
+```bash
+poetry run legal-pipeline orchestrate --start-date 2013-01-01 --end-date 2013-01-31 --body "Employment Appeals Tribunal"
+```
+
+This runs the Dagster job in process and executes:
+
+1. scrape/landing ingestion
+2. transform/processed-zone write
+
+If you want the Dagster UI locally, start it with:
+
+```bash
+poetry run dagster dev -m legal_pipeline.infrastructure.orchestration.dagster_defs
+```
+
+Then open the local Dagster UI and run `legal_pipeline_job` with the same config fields:
+- `start_date`
+- `end_date`
+- `body`
+- `case_number`
+- `decision_number`
+- `legislation`
+- `topic`
+- `keyword`
 
 ## Validation So Far
 
@@ -134,13 +169,16 @@ That January 2013 range contains `Employment Appeals Tribunal` records with both
 - transform verified for:
   - live HTML cleaning
   - live PDF passthrough
+- Dagster orchestration verified for:
+  - in-process job execution
+  - scrape followed by transform in one job
 
 ## Remaining Work
 
 1. verify a live DOC/DOCX example from the source site if one is exposed
 2. enrich processed metadata and reporting where useful
 3. add stronger failure summaries and retry reporting for transform runs
-4. wire Dagster jobs for ingestion then transformation
+4. add schedules/sensors if this needed recurring production-style runs
 
 ## Logging
 

@@ -47,6 +47,8 @@ def configure_logging(settings: Settings) -> None:
     )
 
     for noisy_logger in (
+        "alembic",
+        "dagster",
         "pymongo",
         "pymongo.command",
         "urllib3",
