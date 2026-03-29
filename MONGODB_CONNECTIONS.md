@@ -9,7 +9,7 @@ This is the user the scraper app should use.
 Connection string:
 
 ```text
-mongodb://legal_pipeline_user:legal_pipeline_pass@localhost:27018/legal_pipeline?authSource=legal_pipeline
+mongodb://<MONGO_APP_USERNAME>:<MONGO_APP_PASSWORD>@localhost:27018/legal_pipeline?authSource=legal_pipeline
 ```
 
 Permissions:
@@ -29,7 +29,7 @@ This is the root MongoDB user created by Docker initialization.
 Connection string:
 
 ```text
-mongodb://admin:admin123@localhost:27018/?authSource=admin
+mongodb://<MONGO_ROOT_USERNAME>:<MONGO_ROOT_PASSWORD>@localhost:27018/?authSource=admin
 ```
 
 Permissions:

@@ -35,6 +35,8 @@ docker/             # extra docker-related assets
 cp .env.example .env
 ```
 
+Update the placeholder credentials in `.env` before starting Docker or running the app.
+
 2. Install dependencies with Poetry:
 
 ```bash
@@ -55,8 +57,8 @@ docker compose up -d
 
 5. Verify services:
 
-- MongoDB app URI: `mongodb://legal_pipeline_user:legal_pipeline_pass@localhost:27018/legal_pipeline?authSource=legal_pipeline`
-- MongoDB admin URI: `mongodb://admin:admin123@localhost:27018/?authSource=admin`
+- MongoDB app URI: use the `MONGODB_URI` value from your local `.env`
+- MongoDB admin URI: build it from `MONGO_ROOT_USERNAME` / `MONGO_ROOT_PASSWORD` in your local `.env`
 - MinIO API: [http://localhost:9000](http://localhost:9000)
 - MinIO Console: [http://localhost:9001](http://localhost:9001)
 
