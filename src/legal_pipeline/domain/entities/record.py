@@ -10,12 +10,13 @@ class DocumentRecord:
     identifier: str
     title: str
     description: Optional[str]
+    case_number: Optional[str]
     record_date: Optional[date]
     partition_date: str
     source_page_url: str
     document_url: str
+    file_name: Optional[str] = None
     content_type: Optional[str] = None
     storage_path: Optional[str] = None
     file_hash: Optional[str] = None
     scrape_status: str = "pending"
-

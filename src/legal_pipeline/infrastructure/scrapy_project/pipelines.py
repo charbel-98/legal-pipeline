@@ -82,6 +82,8 @@ class LandingZonePipeline:
                 partition_date=str(item["partition_date"]),
                 identifier=identifier,
                 content_type=str(item.get("content_type") or "text/html"),
+                file_name=_optional_str(item.get("file_name")),
+                document_url=_optional_str(item.get("document_url")),
             )
             storage_path = self._with_retries(
                 operation_name="upload_bytes",
@@ -100,10 +102,12 @@ class LandingZonePipeline:
             identifier=identifier,
             title=str(item.get("title") or identifier),
             description=_optional_str(item.get("description")),
+            case_number=_optional_str(item.get("case_number")),
             record_date=_optional_date(item.get("record_date")),
             partition_date=str(item["partition_date"]),
             source_page_url=str(item["source_page_url"]),
             document_url=str(item["document_url"]),
+            file_name=_optional_str(item.get("file_name")),
             content_type=str(item.get("content_type") or "text/html"),
             storage_path=storage_path,
             file_hash=file_hash,
@@ -121,6 +125,11 @@ class LandingZonePipeline:
         return item
 
     def _build_payload(self, item: Any) -> bytes:
+        if item.get("content_bytes"):
+            payload = item["content_bytes"]
+            if isinstance(payload, bytes):
+                return payload
+            return bytes(payload)
         if item.get("content_html"):
             return str(item["content_html"]).encode("utf-8")
         return str(item.get("document_url") or "").encode("utf-8")
