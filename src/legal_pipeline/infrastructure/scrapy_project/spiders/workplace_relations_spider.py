@@ -2,6 +2,7 @@ from datetime import date, datetime
 from urllib.parse import urljoin, urlparse
 
 from scrapy import FormRequest, Request, Spider
+from scrapy.http import TextResponse
 
 from legal_pipeline.application.logging.logger import get_logger
 from legal_pipeline.application.services.search_plan_service import build_search_plans
@@ -144,20 +145,20 @@ class WorkplaceRelationsSpider(Spider):
         yield self._build_file_item(response=response, partial_item=partial_item)
 
     def _build_html_item(self, response, partial_item):
-        content_node = response.css("div.content").get()
-        case_number = _extract_case_number(response) or partial_item.get("case_number")
+        detail_metadata = _extract_detail_metadata(response, partial_item)
+        content_node = detail_metadata["content_html"]
         item = WorkplaceRelationsItem()
         item["source"] = partial_item["source"]
         item["body"] = partial_item["body"]
         item["identifier"] = partial_item["identifier"]
-        item["title"] = partial_item["title"]
-        item["description"] = partial_item["description"]
-        item["case_number"] = case_number
-        item["record_date"] = partial_item["record_date"]
+        item["title"] = detail_metadata["title"]
+        item["description"] = detail_metadata["description"]
+        item["case_number"] = detail_metadata["case_number"]
+        item["record_date"] = detail_metadata["record_date"]
         item["partition_date"] = partial_item["partition_date"]
         item["source_page_url"] = partial_item["source_page_url"]
         item["document_url"] = partial_item["document_url"]
-        item["file_name"] = partial_item.get("file_name") or _file_name_from_response(response, response.url)
+        item["file_name"] = detail_metadata["file_name"]
         item["content_type"] = _normalize_content_type(response.headers.get("Content-Type")) or "text/html"
         item["content_bytes"] = None
         item["content_html"] = content_node
@@ -175,18 +176,19 @@ class WorkplaceRelationsSpider(Spider):
         return item
 
     def _build_file_item(self, response, partial_item):
+        detail_metadata = _extract_detail_metadata(response, partial_item)
         item = WorkplaceRelationsItem()
         item["source"] = partial_item["source"]
         item["body"] = partial_item["body"]
         item["identifier"] = partial_item["identifier"]
-        item["title"] = partial_item["title"]
-        item["description"] = partial_item["description"]
-        item["case_number"] = partial_item.get("case_number")
-        item["record_date"] = partial_item["record_date"]
+        item["title"] = detail_metadata["title"]
+        item["description"] = detail_metadata["description"]
+        item["case_number"] = detail_metadata["case_number"]
+        item["record_date"] = detail_metadata["record_date"]
         item["partition_date"] = partial_item["partition_date"]
         item["source_page_url"] = partial_item["source_page_url"]
         item["document_url"] = response.url
-        item["file_name"] = partial_item.get("file_name") or _file_name_from_response(response, response.url)
+        item["file_name"] = detail_metadata["file_name"]
         item["content_type"] = _normalize_content_type(response.headers.get("Content-Type")) or "application/octet-stream"
         item["content_bytes"] = bytes(response.body)
         item["content_html"] = None
@@ -227,15 +229,24 @@ def _clean_text(raw: str | list[str] | None) -> str | None:
 
 
 def _extract_case_number(response) -> str | None:
-    candidate = response.css("div.content table b::text").get()
-    return _clean_text(candidate)
+    selectors = [
+        "div.content table b::text",
+        "div.content td b::text",
+        "div.content strong::text",
+    ]
+    for selector in selectors:
+        candidates = [_clean_text(value) for value in response.css(selector).getall()]
+        for candidate in candidates:
+            if candidate and "/" in candidate and any(char.isdigit() for char in candidate):
+                return candidate
+    return None
 
 
 def _has_meaningful_html_content(response) -> bool:
-    content_node = response.css("div.content").get()
+    content_node = _extract_content_html(response)
     if not content_node:
         return False
-    text_content = _clean_text(response.css("div.content ::text").getall())
+    text_content = _clean_text(_extract_content_text(response))
     return bool(text_content and len(text_content) >= 100)
 
 
@@ -244,6 +255,8 @@ def _extract_attachment_href(response) -> str | None:
         "div.content a[href$='.pdf']::attr(href)",
         "div.content a[href$='.doc']::attr(href)",
         "div.content a[href$='.docx']::attr(href)",
+        "div.related-items.related-file a.download::attr(href)",
+        "div.related-item-content a.download::attr(href)",
     ]
     for selector in selectors:
         href = response.css(selector).get()
@@ -291,7 +304,7 @@ def _file_name_from_response(response, fallback_url: str) -> str | None:
             part = part.strip()
             if part.lower().startswith("filename="):
                 return part.split("=", 1)[1].strip().strip("\"")
-    return _file_name_from_url(fallback_url)
+    return _extract_related_file_name(response) or _file_name_from_url(fallback_url)
 
 
 def _file_name_from_url(url: str | None) -> str | None:
@@ -317,3 +330,113 @@ def _identifier_from_path(path: str | None) -> str | None:
     stem = file_name.rsplit(".", 1)[0]
     cleaned = stem.strip().upper()
     return cleaned or None
+
+
+def _extract_detail_metadata(response, partial_item):
+    if not isinstance(response, TextResponse):
+        return {
+            "title": partial_item.get("title") or partial_item["identifier"],
+            "description": partial_item.get("description"),
+            "case_number": partial_item.get("case_number"),
+            "record_date": partial_item.get("record_date"),
+            "content_html": None,
+            "file_name": partial_item.get("file_name") or _file_name_from_url(response.url),
+        }
+    record_date = _extract_detail_record_date(response) or partial_item.get("record_date")
+    return {
+        "title": _extract_detail_title(response) or partial_item.get("title") or partial_item["identifier"],
+        "description": _extract_detail_description(response) or partial_item.get("description"),
+        "case_number": _extract_case_number(response) or partial_item.get("case_number"),
+        "record_date": record_date,
+        "content_html": _extract_content_html(response),
+        "file_name": partial_item.get("file_name") or _file_name_from_response(response, response.url),
+    }
+
+
+def _extract_detail_title(response) -> str | None:
+    return _clean_text(response.css("h1.page-title::text").get())
+
+
+def _extract_detail_description(response) -> str | None:
+    selectors = [
+        "meta[property='og:description']::attr(content)",
+        "meta[name='description']::attr(content)",
+        "div.content p.description::text",
+        "div.content p::text",
+    ]
+    for selector in selectors:
+        if selector.endswith("p::text"):
+            values = [_clean_text(value) for value in response.css(selector).getall()]
+            for value in values:
+                if value and len(value) >= 20:
+                    return value
+        else:
+            value = _clean_text(response.css(selector).get())
+            if value:
+                return value
+    return None
+
+
+def _extract_detail_record_date(response) -> str | None:
+    candidate_texts = response.css("div.content ::text, div.related-item-content ::text").getall()
+    for raw in candidate_texts:
+        cleaned = _clean_text(raw)
+        parsed = _try_parse_long_date(cleaned)
+        if parsed:
+            return parsed.isoformat()
+    return None
+
+
+def _try_parse_long_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    normalized = value.replace("st ", " ").replace("nd ", " ").replace("rd ", " ").replace("th ", " ")
+    for fmt in ("%d %B %Y", "%d %b %Y"):
+        try:
+            return datetime.strptime(normalized, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def _extract_content_html(response) -> str | None:
+    selectors = [
+        "div.content",
+        "div.content-body",
+        "div.case-content",
+        "article",
+    ]
+    for selector in selectors:
+        node = response.css(selector).get()
+        if node and len((_clean_text(response.css(f'{selector} ::text').getall()) or "")) >= 25:
+            return node
+    return response.css("div.content").get()
+
+
+def _extract_content_text(response) -> list[str]:
+    selectors = [
+        "div.content ::text",
+        "div.content-body ::text",
+        "div.case-content ::text",
+        "article ::text",
+    ]
+    for selector in selectors:
+        values = response.css(selector).getall()
+        if _clean_text(values):
+            return values
+    return response.css("div.content ::text").getall()
+
+
+def _extract_related_file_name(response) -> str | None:
+    selectors = [
+        "div.related-item-content p.name::text",
+        "div.related-items.related-file p.name::text",
+    ]
+    for selector in selectors:
+        value = _clean_text(response.css(selector).get())
+        if value:
+            extension = _clean_text(response.css("div.related-item-content span.extension::text").get())
+            if extension and "." not in value:
+                return f"{value}.{extension.lower()}"
+            return value
+    return None

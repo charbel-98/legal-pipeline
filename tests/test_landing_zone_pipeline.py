@@ -112,6 +112,7 @@ def test_landing_pipeline_uploads_binary_payloads_with_original_filename() -> No
     assert object_storage.last_upload is not None
     assert object_storage.last_upload["object_name"].endswith("dec-e2001-001.pdf")
     assert object_storage.last_upload["payload"] == b"%PDF-1.7 fake payload"
+    assert item["content_bytes"] is None
     assert repository.records["workplace_relations:Labour Court:DEC-E2001-001"]["file_name"] == "full-case-report.pdf"
     assert repository.records["workplace_relations:Labour Court:DEC-E2001-001"]["content_type"] == "application/pdf"
 

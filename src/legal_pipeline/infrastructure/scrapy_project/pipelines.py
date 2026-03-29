@@ -122,6 +122,8 @@ class LandingZonePipeline:
         item["storage_path"] = storage_path
         item["file_hash"] = file_hash
         item["scrape_status"] = scrape_status
+        if item.get("content_bytes") is not None:
+            item["content_bytes"] = None
         return item
 
     def _build_payload(self, item: Any) -> bytes:
