@@ -25,10 +25,12 @@ def test_transform_record_cleans_html_and_writes_processed_output() -> None:
         "processed-zone/workplace_relations/labour_court/2024-01-01/lcr22912.html"
     )
     assert processed_record.scrape_status == "transformed"
-    assert (
-        object_storage.uploads[0]["payload"]
-        == b"<main><article><p>Decision body</p></article></main>"
-    )
+    payload = object_storage.uploads[0]["payload"].decode("utf-8")
+    assert payload.startswith("<!DOCTYPE html>")
+    assert '<meta charset="utf-8">' in payload
+    assert "<main><article><p>Decision body</p></article></main>" in payload
+    assert "<header>" not in payload
+    assert "<footer>" not in payload
 
 
 def test_transform_record_passes_pdf_through_unchanged() -> None:

@@ -8,13 +8,17 @@ def extract_relevant_html(html: str) -> str:
         for node in soup.select(selector):
             node.decompose()
 
-    main = soup.find("main")
-    if main is not None:
-        return str(main)
+    content = soup.find("main")
+    if content is None:
+        content = soup.find("article")
 
-    article = soup.find("article")
-    if article is not None:
-        return str(article)
+    if content is None:
+        body = soup.find("body")
+        content = body if body is not None else soup
 
-    body = soup.find("body")
-    return str(body if body is not None else soup)
+    return (
+        "<!DOCTYPE html>"
+        '<html lang="en"><head><meta charset="utf-8"></head><body>'
+        f"{content!s}"
+        "</body></html>"
+    )
