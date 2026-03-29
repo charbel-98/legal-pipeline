@@ -129,7 +129,7 @@ That January 2013 range contains `Employment Appeals Tribunal` records with both
 
 ## Dagster Orchestration
 
-For day-to-day local usage, the simplest orchestration entrypoint is:
+For day-to-day local usage, the orchestration entrypoint is:
 
 ```bash
 poetry run legal-pipeline orchestrate --start-date 2013-01-01 --end-date 2013-01-31 --body "Employment Appeals Tribunal"
@@ -139,22 +139,6 @@ This runs the Dagster job in process and executes:
 
 1. scrape/landing ingestion
 2. transform/processed-zone write
-
-If you want the Dagster UI locally, start it with:
-
-```bash
-poetry run dagster dev -m legal_pipeline.infrastructure.orchestration.dagster_defs
-```
-
-Then open the local Dagster UI and run `legal_pipeline_job` with the same config fields:
-- `start_date`
-- `end_date`
-- `body`
-- `case_number`
-- `decision_number`
-- `legislation`
-- `topic`
-- `keyword`
 
 ## Validation So Far
 
