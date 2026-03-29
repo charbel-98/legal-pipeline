@@ -118,6 +118,8 @@ def _rich_event_renderer(_: Any, __: str, event_dict: structlog.types.EventDict)
 
     if event == "scrape_run_finished":
         return _render_scrape_summary(event_dict, logger_name, timestamp)
+    if event == "transform_run_finished":
+        return _render_transform_summary(event_dict, logger_name, timestamp)
 
     icon, color = _icon_and_color(level, event)
     title = _pretty_event_name(event)
@@ -142,6 +144,9 @@ def _icon_and_color(level: str, event: str) -> tuple[str, str]:
         "landing_pipeline_retry": ("↻", "yellow"),
         "landing_pipeline_failed": ("✖", "red"),
         "scrape_run_finished": ("✔", "green"),
+        "transform_run_started": ("◇", "magenta"),
+        "transform_record_processed": ("⇢", "magenta"),
+        "transform_run_finished": ("✔", "green"),
     }
     if event in event_map:
         return event_map[event]
@@ -164,6 +169,9 @@ def _pretty_event_name(event: str) -> str:
         "landing_pipeline_retry": "Landing Retry",
         "landing_pipeline_failed": "Landing Failure",
         "scrape_run_finished": "Scrape Finished",
+        "transform_run_started": "Transform Started",
+        "transform_record_processed": "Record Transformed",
+        "transform_run_finished": "Transform Finished",
     }
     if event in labels:
         return labels[event]
@@ -184,6 +192,10 @@ def _format_detail_pairs(event_dict: dict[str, Any]) -> str:
         "unchanged_count",
         "failed_count",
         "retry_count",
+        "records_read",
+        "records_written",
+        "transformed_count",
+        "passthrough_count",
         "identifier",
         "body",
         "operation",
@@ -221,6 +233,33 @@ def _render_scrape_summary(
             f"[bold blue]Unchanged[/bold blue] {event_dict.pop('unchanged_count', 0)}    "
             f"[bold red]Failed[/bold red] {event_dict.pop('failed_count', 0)}    "
             f"[bold yellow]Retries[/bold yellow] {event_dict.pop('retry_count', 0)}"
+        ),
+    ]
+    if logger_name and logger_name not in {"__main__", "root"}:
+        lines.append(f"[grey50]{logger_name}[/grey50]")
+    if timestamp:
+        lines.append(f"[grey62]{timestamp}[/grey62]")
+    return "\n".join(lines)
+
+
+def _render_transform_summary(
+    event_dict: dict[str, Any],
+    logger_name: str,
+    timestamp: str,
+) -> str:
+    lines = [
+        "[green]✔[/green] [bold green]Transform Finished[/bold green]",
+        (
+            f"[bold]Range[/bold] {event_dict.pop('start_date', '?')} -> "
+            f"{event_dict.pop('end_date', '?')}"
+        ),
+        (
+            f"[bold]Read[/bold] {event_dict.pop('records_read', 0)}    "
+            f"[bold]Written[/bold] {event_dict.pop('records_written', 0)}"
+        ),
+        (
+            f"[bold magenta]HTML Cleaned[/bold magenta] {event_dict.pop('transformed_count', 0)}    "
+            f"[bold blue]Binary Passthrough[/bold blue] {event_dict.pop('passthrough_count', 0)}"
         ),
     ]
     if logger_name and logger_name not in {"__main__", "root"}:

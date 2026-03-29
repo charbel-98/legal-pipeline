@@ -95,7 +95,7 @@ Current scrape filters scaffolded in the CLI:
 - Scrapy project scaffold
 - live Workplace Relations result/detail parsing
 - landing-zone persistence to MongoDB and MinIO for HTML records
-- transformation service scaffold
+- transformation service that reads landing records, cleans HTML, and writes processed outputs
 - Docker Compose infrastructure
 - Poetry-based dependency and virtualenv management
 
@@ -103,9 +103,9 @@ Current scrape filters scaffolded in the CLI:
 
 1. extend landing-zone handling to PDF/DOC downloads in addition to HTML pages
 2. enrich metadata extraction from detail pages
-3. implement transformation reads from MongoDB and MinIO
-4. clean HTML content and write processed-zone outputs
-5. emit structured run summaries and failure logs
+3. verify a live DOC/DOCX example from the source site if one is exposed
+4. enrich processed metadata and reporting as needed
+5. emit stronger failure summaries and retry reporting for transform runs
 6. wire Dagster jobs for ingestion then transformation
 
 ## Logging
