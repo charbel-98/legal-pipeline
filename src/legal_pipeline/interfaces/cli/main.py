@@ -4,6 +4,8 @@ from legal_pipeline.application.config.settings import get_settings
 from legal_pipeline.application.logging.logger import configure_logging
 from legal_pipeline.application.use_cases.run_scrape import run_scrape
 from legal_pipeline.application.use_cases.run_transform import run_transform
+from legal_pipeline.infrastructure.db.mongo_repository import MongoMetadataRepository
+from legal_pipeline.infrastructure.object_store.minio_storage import MinioObjectStorage
 from legal_pipeline.infrastructure.orchestration.dagster_defs import execute_legal_pipeline_job
 
 app = typer.Typer(help="Legal pipeline CLI")
@@ -45,7 +47,12 @@ def transform(
     end_date: str | None = typer.Option(None, "--end-date"),
 ) -> None:
     settings = get_settings()
-    run_transform(start_date or settings.default_start_date, end_date or settings.default_end_date)
+    run_transform(
+        start_date or settings.default_start_date,
+        end_date or settings.default_end_date,
+        metadata_repository=MongoMetadataRepository(settings),
+        object_storage=MinioObjectStorage(settings),
+    )
 
 
 @app.command()

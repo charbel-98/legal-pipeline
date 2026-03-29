@@ -1,4 +1,3 @@
-from datetime import date
 from typing import Any
 
 try:
@@ -9,8 +8,10 @@ except ModuleNotFoundError:  # pragma: no cover - used only in lightweight unit 
         pass
 
 
+from legal_pipeline.application.services.date_utils import parse_optional_date
 from legal_pipeline.application.services.hash_service import sha256_bytes
 from legal_pipeline.domain.entities.record import DocumentRecord
+from legal_pipeline.domain.entities.scrape_status import ScrapeStatus
 from legal_pipeline.domain.repositories.metadata_repository import MetadataRepository
 from legal_pipeline.domain.storage.object_storage import ObjectStorage
 from legal_pipeline.infrastructure.scrapy_project.object_naming import build_object_name
@@ -53,10 +54,16 @@ class LandingZonePipeline:
             self._inc_stat("landing_pipeline/failed")
             identifier = str(item.get("identifier") or "unknown")
             source = str(item.get("source") or "unknown")
+            link_to_doc = str(item.get("link_to_doc") or "unknown")
             if self._crawler is not None:
                 self._crawler.spider.logger.error(
                     "landing_pipeline_failed",
-                    extra={"identifier": identifier, "source": source, "error": str(exc)},
+                    extra={
+                        "identifier": identifier,
+                        "source": source,
+                        "link_to_doc": link_to_doc,
+                        "error": str(exc),
+                    },
                 )
             raise DropItem(f"Failed to persist landing item {source}:{identifier}: {exc}") from exc
 
@@ -73,9 +80,9 @@ class LandingZonePipeline:
             identifier=identifier,
         )
 
-        if existing and existing.get("file_hash") == file_hash and existing.get("storage_path"):
-            storage_path = str(existing["storage_path"])
-            scrape_status = "unchanged"
+        if existing and existing.get("file_hash") == file_hash and existing.get("path_to_file"):
+            path_to_file = str(existing["path_to_file"])
+            scrape_status = ScrapeStatus.UNCHANGED
             self._inc_stat("landing_pipeline/unchanged")
         else:
             object_name = build_object_name(
@@ -85,9 +92,9 @@ class LandingZonePipeline:
                 identifier=identifier,
                 content_type=str(item.get("content_type") or "text/html"),
                 file_name=_optional_str(item.get("file_name")),
-                document_url=_optional_str(item.get("document_url")),
+                document_url=_optional_str(item.get("link_to_doc")),
             )
-            storage_path = self._with_retries(
+            path_to_file = self._with_retries(
                 operation_name="upload_bytes",
                 func=self._object_storage.upload_bytes,
                 bucket_name=self._settings.minio_landing_bucket,
@@ -95,7 +102,7 @@ class LandingZonePipeline:
                 payload=payload,
                 content_type=str(item.get("content_type") or "text/html"),
             )
-            scrape_status = "stored"
+            scrape_status = ScrapeStatus.STORED
             self._inc_stat("landing_pipeline/stored")
 
         record = DocumentRecord(
@@ -105,13 +112,13 @@ class LandingZonePipeline:
             title=str(item.get("title") or identifier),
             description=_optional_str(item.get("description")),
             case_number=_optional_str(item.get("case_number")),
-            record_date=_optional_date(item.get("record_date")),
+            record_date=parse_optional_date(item.get("record_date")),
             partition_date=str(item["partition_date"]),
             source_page_url=str(item["source_page_url"]),
-            document_url=str(item["document_url"]),
+            link_to_doc=str(item["link_to_doc"]),
             file_name=_optional_str(item.get("file_name")),
             content_type=str(item.get("content_type") or "text/html"),
-            storage_path=storage_path,
+            path_to_file=path_to_file,
             file_hash=file_hash,
             scrape_status=scrape_status,
         )
@@ -121,7 +128,7 @@ class LandingZonePipeline:
             record=record,
         )
 
-        item["storage_path"] = storage_path
+        item["path_to_file"] = path_to_file
         item["file_hash"] = file_hash
         item["scrape_status"] = scrape_status
         if item.get("content_bytes") is not None:
@@ -136,7 +143,7 @@ class LandingZonePipeline:
             return bytes(payload)
         if item.get("content_html"):
             return str(item["content_html"]).encode("utf-8")
-        return str(item.get("document_url") or "").encode("utf-8")
+        return str(item.get("link_to_doc") or "").encode("utf-8")
 
     def _with_retries(self, operation_name: str, func: Any, **kwargs: Any) -> Any:
         last_error: Exception | None = None
@@ -172,11 +179,3 @@ def _optional_str(value: Any) -> str | None:
         return None
     cleaned = str(value).strip()
     return cleaned or None
-
-
-def _optional_date(value: Any) -> date | None:
-    if value in (None, ""):
-        return None
-    if isinstance(value, date):
-        return value
-    return date.fromisoformat(str(value))

@@ -1,3 +1,4 @@
+from collections.abc import Iterable
 from typing import Any
 
 from pymongo import ASCENDING, MongoClient
@@ -9,12 +10,22 @@ from legal_pipeline.domain.repositories.metadata_repository import MetadataRepos
 
 
 class MongoMetadataRepository(MetadataRepository):
+    _indexes_ensured: bool = False
+
     def __init__(self, settings: Settings) -> None:
         self._client = MongoClient(settings.mongodb_uri)
         self._database = self._client[settings.mongodb_database]
         self._landing_collection = self._database[settings.mongodb_landing_collection]
         self._processed_collection = self._database[settings.mongodb_processed_collection]
-        self.ensure_indexes()
+        if not MongoMetadataRepository._indexes_ensured:
+            self.ensure_indexes()
+            MongoMetadataRepository._indexes_ensured = True
+
+    def __enter__(self) -> "MongoMetadataRepository":
+        return self
+
+    def __exit__(self, *_: Any) -> None:
+        self._client.close()
 
     def ensure_indexes(self) -> None:
         identity_index = [
@@ -50,11 +61,10 @@ class MongoMetadataRepository(MetadataRepository):
 
     def find_landing_records_by_date_range(
         self, start_date: str, end_date: str
-    ) -> list[dict[str, Any]]:
-        cursor = self._landing_collection.find(
+    ) -> Iterable[dict[str, Any]]:
+        return self._landing_collection.find(
             {"partition_date": {"$gte": start_date, "$lte": end_date}}
         )
-        return list(cursor)
 
     def get_landing_record(self, source: str, body: str, identifier: str) -> dict[str, Any] | None:
         return self._landing_collection.find_one(

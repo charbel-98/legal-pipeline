@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from dataclasses import asdict
-from datetime import date
-from hashlib import sha256
+from dataclasses import fields as dataclass_fields
 from typing import Any
 
 from legal_pipeline.application.config.settings import Settings, get_settings
 from legal_pipeline.application.logging.logger import get_logger
+from legal_pipeline.application.services.date_utils import parse_optional_date
+from legal_pipeline.application.services.hash_service import sha256_bytes
 from legal_pipeline.domain.entities.record import DocumentRecord
+from legal_pipeline.domain.entities.scrape_status import ScrapeStatus
 from legal_pipeline.domain.repositories.metadata_repository import MetadataRepository
 from legal_pipeline.domain.storage.object_storage import ObjectStorage
-from legal_pipeline.infrastructure.db.mongo_repository import MongoMetadataRepository
-from legal_pipeline.infrastructure.object_store.minio_storage import MinioObjectStorage
 from legal_pipeline.infrastructure.scrapy_project.object_naming import (
     build_object_name,
     infer_extension,
@@ -22,13 +21,11 @@ from legal_pipeline.infrastructure.transformers.html_cleaner import extract_rele
 def run_transform(
     start_date: str,
     end_date: str,
-    metadata_repository: MetadataRepository | None = None,
-    object_storage: ObjectStorage | None = None,
+    metadata_repository: MetadataRepository,
+    object_storage: ObjectStorage,
     settings: Settings | None = None,
 ) -> None:
     settings = settings or get_settings()
-    metadata_repository = metadata_repository or MongoMetadataRepository(settings)
-    object_storage = object_storage or MinioObjectStorage(settings)
     logger = get_logger(__name__)
 
     logger.info("transform_run_started", start_date=start_date, end_date=end_date)
@@ -36,8 +33,10 @@ def run_transform(
     landing_records = metadata_repository.find_landing_records_by_date_range(start_date, end_date)
     transformed_count = 0
     passthrough_count = 0
+    total_records = 0
 
     for landing_record in landing_records:
+        total_records += 1
         processed_record = transform_record(
             landing_record=landing_record,
             object_storage=object_storage,
@@ -55,15 +54,15 @@ def run_transform(
             identifier=processed_record.identifier,
             body=processed_record.body,
             content_type=processed_record.content_type,
-            output_path=processed_record.storage_path,
+            output_path=processed_record.path_to_file,
         )
 
     logger.info(
         "transform_run_finished",
         start_date=start_date,
         end_date=end_date,
-        records_read=len(landing_records),
-        records_written=len(landing_records),
+        records_read=total_records,
+        records_written=total_records,
         transformed_count=transformed_count,
         passthrough_count=passthrough_count,
     )
@@ -74,7 +73,7 @@ def transform_record(
     object_storage: ObjectStorage,
     settings: Settings,
 ) -> DocumentRecord:
-    bucket_name, object_name = _split_storage_path(landing_record["storage_path"])
+    bucket_name, object_name = _split_storage_path(landing_record["path_to_file"])
     original_payload = object_storage.download_bytes(bucket_name, object_name)
     content_type = landing_record.get("content_type") or "application/octet-stream"
 
@@ -91,7 +90,7 @@ def transform_record(
         identifier=landing_record["identifier"],
         content_type=processed_content_type,
         source_file_name=landing_record.get("file_name"),
-        document_url=landing_record.get("document_url"),
+        link_to_doc=landing_record.get("link_to_doc"),
     )
     processed_object_name = build_object_name(
         source=landing_record["source"],
@@ -100,9 +99,9 @@ def transform_record(
         identifier=landing_record["identifier"],
         content_type=processed_content_type,
         file_name=processed_file_name,
-        document_url=landing_record.get("document_url"),
+        document_url=landing_record.get("link_to_doc"),
     )
-    storage_path = object_storage.upload_bytes(
+    path_to_file = object_storage.upload_bytes(
         bucket_name=settings.minio_processed_bucket,
         object_name=processed_object_name,
         payload=processed_payload,
@@ -113,8 +112,8 @@ def transform_record(
         landing_record=landing_record,
         processed_file_name=processed_file_name,
         processed_content_type=processed_content_type,
-        storage_path=storage_path,
-        file_hash=sha256(processed_payload).hexdigest(),
+        path_to_file=path_to_file,
+        file_hash=sha256_bytes(processed_payload),
     )
 
 
@@ -122,57 +121,33 @@ def _build_processed_record(
     landing_record: dict[str, Any],
     processed_file_name: str,
     processed_content_type: str,
-    storage_path: str,
+    path_to_file: str,
     file_hash: str,
 ) -> DocumentRecord:
     base_record = _normalize_record_payload(landing_record)
     record = DocumentRecord(**base_record)
     record.file_name = processed_file_name
     record.content_type = processed_content_type
-    record.storage_path = storage_path
+    record.path_to_file = path_to_file
     record.file_hash = file_hash
-    record.scrape_status = "transformed"
+    record.scrape_status = ScrapeStatus.TRANSFORMED
     return record
 
 
 def _normalize_record_payload(landing_record: dict[str, Any]) -> dict[str, Any]:
-    payload = {
-        key: landing_record.get(key)
-        for key in asdict(
-            DocumentRecord(
-                source="",
-                body="",
-                identifier="",
-                title="",
-                description=None,
-                case_number=None,
-                record_date=None,
-                partition_date="",
-                source_page_url="",
-                document_url="",
-            )
-        )
-    }
-    payload["record_date"] = _parse_optional_date(payload.get("record_date"))
+    payload = {f.name: landing_record.get(f.name) for f in dataclass_fields(DocumentRecord)}
+    payload["record_date"] = parse_optional_date(payload.get("record_date"))
     return payload
-
-
-def _parse_optional_date(value: Any) -> date | None:
-    if value is None or value == "":
-        return None
-    if isinstance(value, date):
-        return value
-    return date.fromisoformat(str(value))
 
 
 def _is_html_content(content_type: str | None) -> bool:
     return bool(content_type and content_type.split(";", 1)[0].strip().lower() == "text/html")
 
 
-def _split_storage_path(storage_path: str) -> tuple[str, str]:
-    bucket_name, _, object_name = storage_path.partition("/")
+def _split_storage_path(path_to_file: str) -> tuple[str, str]:
+    bucket_name, _, object_name = path_to_file.partition("/")
     if not bucket_name or not object_name:
-        raise ValueError(f"Invalid object storage path: {storage_path}")
+        raise ValueError(f"Invalid object storage path: {path_to_file}")
     return bucket_name, object_name
 
 
@@ -180,12 +155,12 @@ def _build_processed_file_name(
     identifier: str,
     content_type: str | None,
     source_file_name: str | None,
-    document_url: str | None,
+    link_to_doc: str | None,
 ) -> str:
     extension = infer_extension(
         content_type=content_type,
         file_name=source_file_name,
-        document_url=document_url,
+        document_url=link_to_doc,
     )
     safe_identifier = identifier.lower().replace("/", "_")
     return f"{safe_identifier}.{extension}"

@@ -5,6 +5,7 @@ from legal_pipeline.application.services.record_serializer import serialize_reco
 from legal_pipeline.domain.entities.record import DocumentRecord
 from legal_pipeline.infrastructure.scrapy_project.object_naming import build_object_name
 from legal_pipeline.infrastructure.scrapy_project.pipelines import LandingZonePipeline
+from tests.fakes import FakeMetadataRepository, FakeObjectStorage
 
 
 def test_build_object_name_uses_stable_partitioned_path() -> None:
@@ -45,7 +46,7 @@ def test_serialize_record_converts_record_date_to_iso_string() -> None:
         record_date=date(2024, 1, 23),
         partition_date="2024-01-01",
         source_page_url="https://example.com/search",
-        document_url="https://example.com/doc",
+        link_to_doc="https://example.com/doc",
     )
 
     payload = serialize_record(record)
@@ -102,7 +103,7 @@ def test_landing_pipeline_uploads_binary_payloads_with_original_filename() -> No
     item = pipeline.process_item(
         {
             **build_item(identifier="DEC-E2001-001"),
-            "document_url": "https://example.com/files/full-case-report.pdf",
+            "link_to_doc": "https://example.com/files/full-case-report.pdf",
             "file_name": "full-case-report.pdf",
             "content_type": "application/pdf",
             "content_bytes": b"%PDF-1.7 fake payload",
@@ -136,62 +137,9 @@ def build_item(identifier: str) -> dict[str, str]:
         "record_date": "2024-01-23",
         "partition_date": "2024-01-01",
         "source_page_url": "https://example.com/search",
-        "document_url": f"https://example.com/{identifier.lower()}.html",
+        "link_to_doc": f"https://example.com/{identifier.lower()}.html",
         "file_name": f"{identifier.lower()}.html",
         "content_type": "text/html",
         "content_bytes": None,
         "content_html": f"<div>{identifier}</div>",
     }
-
-
-class FakeMetadataRepository:
-    def __init__(self) -> None:
-        self.records: dict[str, dict[str, str]] = {}
-
-    def ensure_indexes(self) -> None:
-        return None
-
-    def upsert_landing_record(self, record: DocumentRecord) -> None:
-        payload = serialize_record(record)
-        key = self._build_key(record.source, record.body, record.identifier)
-        self.records[key] = payload
-
-    def upsert_processed_record(self, record: DocumentRecord) -> None:
-        payload = serialize_record(record)
-        key = self._build_key(record.source, record.body, record.identifier)
-        self.records[key] = payload
-
-    def find_landing_records_by_date_range(
-        self, start_date: str, end_date: str
-    ) -> list[dict[str, str]]:
-        return list(self.records.values())
-
-    def get_landing_record(self, source: str, body: str, identifier: str) -> dict[str, str] | None:
-        return self.records.get(self._build_key(source, body, identifier))
-
-    def _build_key(self, source: str, body: str, identifier: str) -> str:
-        return f"{source}:{body}:{identifier}"
-
-
-class FakeObjectStorage:
-    def __init__(self, fail_upload_attempts: int = 0) -> None:
-        self.fail_upload_attempts = fail_upload_attempts
-        self.upload_count = 0
-        self.last_upload: dict[str, object] | None = None
-
-    def upload_bytes(
-        self, bucket_name: str, object_name: str, payload: bytes, content_type: str
-    ) -> str:
-        self.upload_count += 1
-        if self.upload_count <= self.fail_upload_attempts:
-            raise RuntimeError("transient upload failure")
-        self.last_upload = {
-            "bucket_name": bucket_name,
-            "object_name": object_name,
-            "payload": payload,
-            "content_type": content_type,
-        }
-        return f"{bucket_name}/{object_name}"
-
-    def download_bytes(self, bucket_name: str, object_name: str) -> bytes:
-        return b""

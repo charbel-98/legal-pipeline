@@ -1,25 +1,17 @@
-from datetime import date
 from pathlib import Path
 
 from scrapy.crawler import CrawlerProcess
 
 from legal_pipeline.application.config.settings import get_settings
 from legal_pipeline.application.logging.logger import get_logger
+from legal_pipeline.application.services.date_utils import parse_iso_date
 from legal_pipeline.application.services.search_plan_service import build_search_plans
 from legal_pipeline.domain.entities.search_criteria import SearchCriteria
-from legal_pipeline.infrastructure.scrapy_project.settings import (
-    AUTOTHROTTLE_ENABLED,
-    BOT_NAME,
-    CONCURRENT_REQUESTS,
-    DOWNLOAD_DELAY,
-    DOWNLOAD_TIMEOUT,
-    NEWSPIDER_MODULE,
-    RETRY_TIMES,
-    SPIDER_MODULES,
-)
 from legal_pipeline.infrastructure.scrapy_project.spiders.workplace_relations_spider import (
     WorkplaceRelationsSpider,
 )
+
+_SPIDER_MODULE = "legal_pipeline.infrastructure.scrapy_project.spiders"
 
 
 def run_scrape(
@@ -42,8 +34,8 @@ def run_scrape(
         keyword=keyword,
     )
     plans = build_search_plans(
-        start_date=_parse_iso_date(start_date),
-        end_date=_parse_iso_date(end_date),
+        start_date=parse_iso_date(start_date),
+        end_date=parse_iso_date(end_date),
         criteria=criteria,
     )
 
@@ -65,20 +57,20 @@ def run_scrape(
             filters=plan.criteria.active_filters(),
         )
 
-    artifacts_dir = Path("artifacts/scrape")
+    settings = get_settings()
+    artifacts_dir = Path(settings.artifacts_dir)
     artifacts_dir.mkdir(parents=True, exist_ok=True)
 
-    settings = get_settings()
     process = CrawlerProcess(
         settings={
-            "BOT_NAME": BOT_NAME,
-            "SPIDER_MODULES": SPIDER_MODULES,
-            "NEWSPIDER_MODULE": NEWSPIDER_MODULE,
-            "CONCURRENT_REQUESTS": settings.scrapy_concurrent_requests or CONCURRENT_REQUESTS,
-            "DOWNLOAD_DELAY": settings.scrapy_download_delay or DOWNLOAD_DELAY,
-            "RETRY_TIMES": settings.scrapy_retry_times or RETRY_TIMES,
-            "DOWNLOAD_TIMEOUT": settings.scrapy_request_timeout or DOWNLOAD_TIMEOUT,
-            "AUTOTHROTTLE_ENABLED": settings.scrapy_autothrottle_enabled or AUTOTHROTTLE_ENABLED,
+            "BOT_NAME": "legal_pipeline",
+            "SPIDER_MODULES": [_SPIDER_MODULE],
+            "NEWSPIDER_MODULE": _SPIDER_MODULE,
+            "CONCURRENT_REQUESTS": settings.scrapy_concurrent_requests,
+            "DOWNLOAD_DELAY": settings.scrapy_download_delay,
+            "RETRY_TIMES": settings.scrapy_retry_times,
+            "DOWNLOAD_TIMEOUT": settings.scrapy_request_timeout,
+            "AUTOTHROTTLE_ENABLED": settings.scrapy_autothrottle_enabled,
             "USER_AGENT": settings.scrapy_user_agent,
             "LOG_ENABLED": True,
             "LOG_LEVEL": settings.log_level,
@@ -120,7 +112,3 @@ def run_scrape(
         failed_count=stats.get("landing_pipeline/failed", 0),
         retry_count=stats.get("landing_pipeline/retries", 0),
     )
-
-
-def _parse_iso_date(raw: str) -> date:
-    return date.fromisoformat(raw)

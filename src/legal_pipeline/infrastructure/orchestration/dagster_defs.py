@@ -1,8 +1,11 @@
 from dagster import Config, Definitions, In, Nothing, OpExecutionContext, job, op
 from dagster._core.execution.execute_in_process_result import ExecuteInProcessResult
 
+from legal_pipeline.application.config.settings import get_settings
 from legal_pipeline.application.use_cases.run_scrape import run_scrape
 from legal_pipeline.application.use_cases.run_transform import run_transform
+from legal_pipeline.infrastructure.db.mongo_repository import MongoMetadataRepository
+from legal_pipeline.infrastructure.object_store.minio_storage import MinioObjectStorage
 
 
 class LegalPipelineConfig(Config):
@@ -43,9 +46,12 @@ def transform_op(context: OpExecutionContext, config: LegalPipelineConfig) -> No
         config.start_date,
         config.end_date,
     )
+    settings = get_settings()
     run_transform(
         start_date=config.start_date,
         end_date=config.end_date,
+        metadata_repository=MongoMetadataRepository(settings),
+        object_storage=MinioObjectStorage(settings),
     )
 
 

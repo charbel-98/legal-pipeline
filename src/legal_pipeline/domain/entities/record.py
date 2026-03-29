@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from datetime import date
 
+from legal_pipeline.domain.entities.scrape_status import ScrapeStatus
+
 
 @dataclass(slots=True)
 class DocumentRecord:
@@ -13,9 +15,9 @@ class DocumentRecord:
     record_date: date | None
     partition_date: str
     source_page_url: str
-    document_url: str
+    link_to_doc: str
     file_name: str | None = None
     content_type: str | None = None
-    storage_path: str | None = None
+    path_to_file: str | None = None
     file_hash: str | None = None
-    scrape_status: str = "pending"
+    scrape_status: str = ScrapeStatus.PENDING

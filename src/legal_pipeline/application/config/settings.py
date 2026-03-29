@@ -35,6 +35,8 @@ class Settings(BaseSettings):
     default_start_date: str = Field(alias="DEFAULT_START_DATE")
     default_end_date: str = Field(alias="DEFAULT_END_DATE")
 
+    artifacts_dir: str = Field(default="artifacts/scrape", alias="ARTIFACTS_DIR")
+
     dagster_home: str = Field(default="/opt/dagster/dagster_home", alias="DAGSTER_HOME")
 
 

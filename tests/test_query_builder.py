@@ -1,11 +1,14 @@
+import asyncio
 from datetime import date
-from pathlib import Path
 
 from legal_pipeline.application.services.partition_service import DatePartition
 from legal_pipeline.application.services.search_plan_service import SearchPlan
 from legal_pipeline.domain.entities.search_criteria import SearchCriteria
 from legal_pipeline.infrastructure.scrapy_project.query_builder import (
     WorkplaceRelationsQueryBuilder,
+)
+from legal_pipeline.infrastructure.scrapy_project.spiders.workplace_relations_spider import (
+    WorkplaceRelationsSpider,
 )
 
 
@@ -30,8 +33,12 @@ def test_query_builder_creates_results_url_for_body_partition() -> None:
 
 
 def test_spider_start_marks_bootstrap_requests_as_non_filtered() -> None:
-    spider_source = Path(
-        "src/legal_pipeline/infrastructure/scrapy_project/spiders/workplace_relations_spider.py"
-    ).read_text()
+    spider = WorkplaceRelationsSpider(start_date="2024-01-01", end_date="2024-01-31")
 
-    assert "dont_filter=True" in spider_source
+    async def _collect():
+        return [item async for item in spider.start()]
+
+    requests = asyncio.run(_collect())
+
+    assert len(requests) > 0
+    assert all(r.dont_filter for r in requests)

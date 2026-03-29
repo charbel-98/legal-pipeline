@@ -68,7 +68,7 @@ def test_legal_pipeline_job_runs_scrape_then_transform(monkeypatch) -> None:
             )
         )
 
-    def fake_run_transform(start_date: str, end_date: str) -> None:
+    def fake_run_transform(start_date: str, end_date: str, **kwargs) -> None:
         calls.append(
             (
                 "transform",
@@ -81,6 +81,9 @@ def test_legal_pipeline_job_runs_scrape_then_transform(monkeypatch) -> None:
 
     monkeypatch.setattr(dagster_defs, "run_scrape", fake_run_scrape)
     monkeypatch.setattr(dagster_defs, "run_transform", fake_run_transform)
+    monkeypatch.setattr(dagster_defs, "MongoMetadataRepository", lambda _: None)
+    monkeypatch.setattr(dagster_defs, "MinioObjectStorage", lambda _: None)
+    monkeypatch.setattr(dagster_defs, "get_settings", lambda: None)
 
     result = dagster_defs.execute_legal_pipeline_job(
         start_date="2024-01-01",

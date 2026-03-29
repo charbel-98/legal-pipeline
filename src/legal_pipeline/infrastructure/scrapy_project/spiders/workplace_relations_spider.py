@@ -1,12 +1,14 @@
 from datetime import date, datetime
-from typing import ClassVar
+from typing import Any, ClassVar
 from urllib.parse import urljoin, urlparse
 
 from scrapy import FormRequest, Request, Spider
 from scrapy.http import TextResponse
 
 from legal_pipeline.application.logging.logger import get_logger
+from legal_pipeline.application.services.date_utils import parse_iso_date
 from legal_pipeline.application.services.search_plan_service import build_search_plans
+from legal_pipeline.domain.entities.scrape_status import ScrapeStatus
 from legal_pipeline.domain.entities.search_criteria import SearchCriteria
 from legal_pipeline.infrastructure.scrapy_project.items import WorkplaceRelationsItem
 from legal_pipeline.infrastructure.scrapy_project.query_builder import (
@@ -18,7 +20,7 @@ class WorkplaceRelationsSpider(Spider):
     name = "workplace_relations"
     allowed_domains: ClassVar[list[str]] = ["workplacerelations.ie"]
 
-    def __init__(self, start_date: str, end_date: str, *args, **kwargs) -> None:
+    def __init__(self, start_date: str, end_date: str, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.start_date = start_date
         self.end_date = end_date
@@ -35,8 +37,8 @@ class WorkplaceRelationsSpider(Spider):
 
     async def start(self):
         for plan in build_search_plans(
-            start_date=_parse_iso_date(self.start_date),
-            end_date=_parse_iso_date(self.end_date),
+            start_date=parse_iso_date(self.start_date),
+            end_date=parse_iso_date(self.end_date),
             criteria=self.criteria,
         ):
             yield Request(
@@ -46,7 +48,7 @@ class WorkplaceRelationsSpider(Spider):
                 dont_filter=True,
             )
 
-    def submit_search_form(self, response, plan):
+    def submit_search_form(self, response: TextResponse, plan: Any) -> Any:
         yield FormRequest.from_response(
             response=response,
             formid="form",
@@ -56,7 +58,7 @@ class WorkplaceRelationsSpider(Spider):
             cb_kwargs={"plan": plan},
         )
 
-    def parse_search_results(self, response, plan):
+    def parse_search_results(self, response: TextResponse, plan: Any) -> Any:
         total_results = response.css("div.searchhead::text").getall()
         cleaned_total = " ".join(part.strip() for part in total_results if part.strip())
         self.app_logger.info(
@@ -104,7 +106,7 @@ class WorkplaceRelationsSpider(Spider):
                         "record_date": record_date.isoformat() if record_date else None,
                         "partition_date": plan.partition.partition_date,
                         "source_page_url": response.url,
-                        "document_url": urljoin(response.url, detail_path),
+                        "link_to_doc": urljoin(response.url, detail_path),
                         "file_name": _file_name_from_url(detail_path),
                     },
                 },
@@ -118,7 +120,9 @@ class WorkplaceRelationsSpider(Spider):
                 cb_kwargs={"plan": plan},
             )
 
-    def parse_document_resource(self, response, plan, partial_item):
+    def parse_document_resource(
+        self, response: Any, plan: Any, partial_item: dict[str, Any]
+    ) -> Any:
         if _is_download_response(response):
             yield self._build_file_item(response=response, partial_item=partial_item)
             return
@@ -137,7 +141,7 @@ class WorkplaceRelationsSpider(Spider):
                     "plan": plan,
                     "partial_item": {
                         **partial_item,
-                        "document_url": attachment_url,
+                        "link_to_doc": attachment_url,
                         "file_name": _file_name_from_response(response, attachment_url),
                     },
                 },
@@ -146,12 +150,17 @@ class WorkplaceRelationsSpider(Spider):
 
         yield self._build_html_item(response=response, partial_item=partial_item)
 
-    def parse_file_download(self, response, plan, partial_item):
+    def parse_file_download(
+        self, response: Any, plan: Any, partial_item: dict[str, Any]
+    ) -> Any:
         yield self._build_file_item(response=response, partial_item=partial_item)
 
-    def _build_html_item(self, response, partial_item):
-        detail_metadata = _extract_detail_metadata(response, partial_item)
-        content_node = detail_metadata["content_html"]
+    def _build_base_item(
+        self,
+        response: Any,
+        partial_item: dict[str, Any],
+        detail_metadata: dict[str, Any],
+    ) -> WorkplaceRelationsItem:
         item = WorkplaceRelationsItem()
         item["source"] = partial_item["source"]
         item["body"] = partial_item["body"]
@@ -162,16 +171,23 @@ class WorkplaceRelationsSpider(Spider):
         item["record_date"] = detail_metadata["record_date"]
         item["partition_date"] = partial_item["partition_date"]
         item["source_page_url"] = partial_item["source_page_url"]
-        item["document_url"] = partial_item["document_url"]
+        item["link_to_doc"] = partial_item["link_to_doc"]
         item["file_name"] = detail_metadata["file_name"]
+        item["path_to_file"] = None
+        item["file_hash"] = None
+        item["scrape_status"] = ScrapeStatus.SCRAPED
+        return item
+
+    def _build_html_item(
+        self, response: Any, partial_item: dict[str, Any]
+    ) -> WorkplaceRelationsItem:
+        detail_metadata = _extract_detail_metadata(response, partial_item)
+        item = self._build_base_item(response, partial_item, detail_metadata)
         item["content_type"] = (
             _normalize_content_type(response.headers.get("Content-Type")) or "text/html"
         )
         item["content_bytes"] = None
-        item["content_html"] = content_node
-        item["storage_path"] = None
-        item["file_hash"] = None
-        item["scrape_status"] = "scraped"
+        item["content_html"] = detail_metadata["content_html"]
 
         self.app_logger.info(
             "detail_page_scraped",
@@ -182,29 +198,18 @@ class WorkplaceRelationsSpider(Spider):
         )
         return item
 
-    def _build_file_item(self, response, partial_item):
+    def _build_file_item(
+        self, response: Any, partial_item: dict[str, Any]
+    ) -> WorkplaceRelationsItem:
         detail_metadata = _extract_detail_metadata(response, partial_item)
-        item = WorkplaceRelationsItem()
-        item["source"] = partial_item["source"]
-        item["body"] = partial_item["body"]
-        item["identifier"] = partial_item["identifier"]
-        item["title"] = detail_metadata["title"]
-        item["description"] = detail_metadata["description"]
-        item["case_number"] = detail_metadata["case_number"]
-        item["record_date"] = detail_metadata["record_date"]
-        item["partition_date"] = partial_item["partition_date"]
-        item["source_page_url"] = partial_item["source_page_url"]
-        item["document_url"] = response.url
-        item["file_name"] = detail_metadata["file_name"]
+        item = self._build_base_item(response, partial_item, detail_metadata)
+        item["link_to_doc"] = response.url
         item["content_type"] = (
             _normalize_content_type(response.headers.get("Content-Type"))
             or "application/octet-stream"
         )
-        item["content_bytes"] = bytes(response.body)
+        item["content_bytes"] = response.body
         item["content_html"] = None
-        item["storage_path"] = None
-        item["file_hash"] = None
-        item["scrape_status"] = "scraped"
 
         self.app_logger.info(
             "document_file_downloaded",
@@ -217,10 +222,6 @@ class WorkplaceRelationsSpider(Spider):
             size_bytes=len(response.body),
         )
         return item
-
-
-def _parse_iso_date(raw: str):
-    return date.fromisoformat(raw)
 
 
 def _parse_result_date(raw: str | None) -> date | None:
@@ -238,7 +239,7 @@ def _clean_text(raw: str | list[str] | None) -> str | None:
     return cleaned or None
 
 
-def _extract_case_number(response) -> str | None:
+def _extract_case_number(response: Any) -> str | None:
     selectors = [
         "div.content table b::text",
         "div.content td b::text",
@@ -252,7 +253,7 @@ def _extract_case_number(response) -> str | None:
     return None
 
 
-def _has_meaningful_html_content(response) -> bool:
+def _has_meaningful_html_content(response: Any) -> bool:
     content_node = _extract_content_html(response)
     if not content_node:
         return False
@@ -260,7 +261,7 @@ def _has_meaningful_html_content(response) -> bool:
     return bool(text_content and len(text_content) >= 100)
 
 
-def _extract_attachment_href(response) -> str | None:
+def _extract_attachment_href(response: Any) -> str | None:
     selectors = [
         "div.content a[href$='.pdf']::attr(href)",
         "div.content a[href$='.doc']::attr(href)",
@@ -283,7 +284,7 @@ def _extract_attachment_href(response) -> str | None:
     return None
 
 
-def _is_download_response(response) -> bool:
+def _is_download_response(response: Any) -> bool:
     content_type = _normalize_content_type(response.headers.get("Content-Type"))
     if content_type in {
         "application/msword",
@@ -305,7 +306,7 @@ def _normalize_content_type(raw: bytes | str | None) -> str | None:
     return normalized or None
 
 
-def _file_name_from_response(response, fallback_url: str) -> str | None:
+def _file_name_from_response(response: Any, fallback_url: str) -> str | None:
     disposition = response.headers.get("Content-Disposition")
     if disposition:
         if isinstance(disposition, bytes):
@@ -344,7 +345,7 @@ def _identifier_from_path(path: str | None) -> str | None:
     return cleaned or None
 
 
-def _extract_detail_metadata(response, partial_item):
+def _extract_detail_metadata(response: Any, partial_item: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(response, TextResponse):
         return {
             "title": partial_item.get("title") or partial_item["identifier"],
@@ -368,11 +369,11 @@ def _extract_detail_metadata(response, partial_item):
     }
 
 
-def _extract_detail_title(response) -> str | None:
+def _extract_detail_title(response: Any) -> str | None:
     return _clean_text(response.css("h1.page-title::text").get())
 
 
-def _extract_detail_description(response) -> str | None:
+def _extract_detail_description(response: Any) -> str | None:
     selectors = [
         "meta[property='og:description']::attr(content)",
         "meta[name='description']::attr(content)",
@@ -392,7 +393,7 @@ def _extract_detail_description(response) -> str | None:
     return None
 
 
-def _extract_detail_record_date(response) -> str | None:
+def _extract_detail_record_date(response: Any) -> str | None:
     candidate_texts = response.css("div.content ::text, div.related-item-content ::text").getall()
     for raw in candidate_texts:
         cleaned = _clean_text(raw)
@@ -416,7 +417,7 @@ def _try_parse_long_date(value: str | None) -> date | None:
     return None
 
 
-def _extract_content_html(response) -> str | None:
+def _extract_content_html(response: Any) -> str | None:
     selectors = [
         "div.content",
         "div.content-body",
@@ -430,7 +431,7 @@ def _extract_content_html(response) -> str | None:
     return response.css("div.content").get()
 
 
-def _extract_content_text(response) -> list[str]:
+def _extract_content_text(response: Any) -> list[str]:
     selectors = [
         "div.content ::text",
         "div.content-body ::text",
@@ -444,7 +445,7 @@ def _extract_content_text(response) -> list[str]:
     return response.css("div.content ::text").getall()
 
 
-def _extract_related_file_name(response) -> str | None:
+def _extract_related_file_name(response: Any) -> str | None:
     selectors = [
         "div.related-item-content p.name::text",
         "div.related-items.related-file p.name::text",

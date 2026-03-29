@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from typing import Any
 
 from legal_pipeline.domain.entities.record import DocumentRecord
@@ -20,7 +21,7 @@ class MetadataRepository(ABC):
     @abstractmethod
     def find_landing_records_by_date_range(
         self, start_date: str, end_date: str
-    ) -> list[dict[str, Any]]:
+    ) -> Iterable[dict[str, Any]]:
         """Fetch landing-zone records for transformation."""
 
     @abstractmethod
