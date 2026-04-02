@@ -1,7 +1,7 @@
 services:
   mongodb:
     image: mongo:7
-    container_name: legal-pipeline-mongodb
+    container_name: legal-pipeline-mongodb-v2
     restart: unless-stopped
     ports:
       - "27018:27017"
@@ -17,7 +17,7 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: legal-pipeline-minio
+    container_name: legal-pipeline-minio-v2
     restart: unless-stopped
     command: server /data --console-address ":9001"
     ports:
@@ -31,7 +31,7 @@ services:
 
   minio-init:
     image: minio/mc:latest
-    container_name: legal-pipeline-minio-init
+    container_name: legal-pipeline-minio-init-v2
     depends_on:
       - minio
     environment:

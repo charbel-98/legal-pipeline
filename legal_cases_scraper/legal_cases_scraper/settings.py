@@ -7,6 +7,7 @@
 #     https://docs.scrapy.org/en/latest/topics/downloader-middleware.html
 #     https://docs.scrapy.org/en/latest/topics/spider-middleware.html
 
+import os
 from typing import Any
 
 BOT_NAME = "legal_cases_scraper"
@@ -60,9 +61,26 @@ DOWNLOAD_DELAY = 1
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-# ITEM_PIPELINES = {
-#    "legal_cases_scraper.pipelines.LegalCasesPipeline": 300,
-# }
+ITEM_PIPELINES = {
+    # MinIO runs first (priority 200) so path_to_file/file_hash are set
+    # before the MongoDB pipeline writes the metadata record.
+    "legal_cases_scraper.pipelines.MinIOLandingPipeline": 200,
+    "legal_cases_scraper.pipelines.MongoLandingPipeline": 300,
+}
+
+# MongoDB — landing zone
+MONGO_HOST = os.environ.get("MONGO_HOST", "localhost")
+MONGO_PORT = int(os.environ.get("MONGO_PORT", 27018))
+MONGO_APP_DATABASE = os.environ.get("MONGO_APP_DATABASE", "legal_cases")
+MONGO_APP_USERNAME = os.environ.get("MONGO_APP_USERNAME", "scrapy_user")
+MONGO_APP_PASSWORD = os.environ.get("MONGO_APP_PASSWORD", "scrapy_password")
+
+# MinIO — landing zone
+MINIO_HOST = os.environ.get("MINIO_HOST", "localhost")
+MINIO_PORT = int(os.environ.get("MINIO_PORT", 9000))
+MINIO_ROOT_USER = os.environ.get("MINIO_ROOT_USER", "minioadmin")
+MINIO_ROOT_PASSWORD = os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin123")
+MINIO_LANDING_BUCKET = os.environ.get("MINIO_LANDING_BUCKET", "landing-zone")
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
