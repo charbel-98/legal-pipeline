@@ -1,0 +1,3 @@
+# ignore all html files and json files
+*.html
+*.json
