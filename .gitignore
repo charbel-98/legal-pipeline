@@ -1,9 +1,55 @@
-# ignore all html files and json files
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Scrapy outputs
 *.html
 *.json
+*.csv
+*.xml
 
-# ignore minio_data folder and mongo_data folder
-minio_data/*
-mongo_data/*
+# Data directories (docker volumes)
+minio_data/
+mongo_data/
 
+# Environment variables
 .env
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Cache
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+scrapy.log

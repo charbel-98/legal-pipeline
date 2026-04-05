@@ -103,5 +103,12 @@ MINIO_LANDING_BUCKET = os.environ.get("MINIO_LANDING_BUCKET", "landing-zone")
 # HTTPCACHE_IGNORE_HTTP_CODES = []
 # HTTPCACHE_STORAGE = "scrapy.extensions.httpcache.FilesystemCacheStorage"
 
+# MinIO — processed zone
+MINIO_PROCESSED_BUCKET = os.environ.get("MINIO_PROCESSED_BUCKET", "processed-zone")
+
+# Scraping date range — used as fallback when spider args are not provided
+SCRAPE_START_DATE = os.environ.get("SCRAPE_START_DATE", "")
+SCRAPE_END_DATE = os.environ.get("SCRAPE_END_DATE", "")
+
 # Set settings whose default value is deprecated to a future-proof value
 FEED_EXPORT_ENCODING = "utf-8"
