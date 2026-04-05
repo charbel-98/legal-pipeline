@@ -28,9 +28,17 @@ ENV/
 *.csv
 *.xml
 
-# Data directories (docker volumes)
+# Data directories (docker volumes and local dev mounts)
 minio_data/
 mongo_data/
+storage/landing/*
+storage/curated/*
+!storage/landing/.gitkeep
+!storage/curated/.gitkeep
+
+# Dagster local storage
+$DAGSTER_HOME/
+.dagster/
 
 # Environment variables
 .env

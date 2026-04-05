@@ -1,7 +1,7 @@
 [project]
-name = "legal-cases-scraper"
+name = "legal-pipeline"
 version = "0.1.0"
-description = ""
+description = "Legal cases scraping and transformation pipeline"
 authors = [
     {name = "Charbel Saliba",email = "charbel_cg@outlook.com"}
 ]
@@ -13,12 +13,15 @@ dependencies = [
     "minio (>=7.2,<8.0)",
     "beautifulsoup4 (>=4.12,<5.0)",
     "python-dotenv (>=1.0,<2.0)",
+    "dagster (>=1.8,<2.0)",
+    "dagster-webserver (>=1.8,<2.0)",
 ]
 
 [dependency-groups]
 dev = [
     "mypy>=1.18.2,<2.0.0",
     "ruff>=0.12.12,<0.13.0",
+    "pytest>=8.0,<9.0",
 ]
 
 [tool.poetry]
@@ -27,7 +30,7 @@ package-mode = false
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["legal_cases_scraper"]
+src = ["app", "config", "orchestrator", "scrapy_project", "scripts", "tests"]
 
 [tool.ruff.lint]
 select = [
@@ -45,8 +48,7 @@ line-ending = "lf"
 
 [tool.mypy]
 python_version = "3.12"
-files = ["legal_cases_scraper/legal_cases_scraper"]
-mypy_path = ["legal_cases_scraper"]
+files = ["app", "config", "orchestrator", "scrapy_project/legal_scraper"]
 explicit_package_bases = true
 check_untyped_defs = true
 warn_return_any = true
@@ -62,8 +64,15 @@ module = [
     "minio.*",
     "bs4.*",
     "dotenv.*",
+    "dagster.*",
 ]
 ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: marks tests as integration tests (require running services)",
+]
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]

@@ -13,7 +13,7 @@ services:
       MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD}
     volumes:
       - ./mongo_data:/data/db
-      - ./docker/mongodb/init:/docker-entrypoint-initdb.d
+      - ./infra/mongo:/docker-entrypoint-initdb.d
 
   minio:
     image: minio/minio:latest
