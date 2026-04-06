@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import calendar
 import logging
+import os
 from datetime import date, datetime
-from typing import Iterator
+from typing import AsyncIterator, Iterator
 import scrapy
 from scrapy.http import Request, Response
 
@@ -61,6 +62,24 @@ class WorkplaceRelationsSpider(scrapy.Spider):
     name = "workplace_relations"
     allowed_domains = ["www.workplacerelations.ie"]
 
+    custom_settings = {
+        # Rate limiting for workplacerelations.ie
+        "CONCURRENT_REQUESTS_PER_DOMAIN": int(os.environ.get("CONCURRENT_REQUESTS_PER_DOMAIN", 1)),
+        "DOWNLOAD_DELAY": int(os.environ.get("DOWNLOAD_DELAY", 1)),
+        # Scraping date range — fallback when spider args are not provided
+        "SCRAPE_START_DATE": os.environ.get("SCRAPE_START_DATE", ""),
+        "SCRAPE_END_DATE": os.environ.get("SCRAPE_END_DATE", ""),
+        # ScrapeOps anti-blocking
+        "SCRAPEOPS_API_KEY": os.environ.get("SCRAPEOPS_API_KEY", ""),
+        "SCRAPEOPS_HEADERS_ENABLED": os.environ.get("SCRAPEOPS_HEADERS_ENABLED", "true").lower() == "true",
+        "SCRAPEOPS_PROXY_ENABLED": os.environ.get("SCRAPEOPS_PROXY_ENABLED", "false").lower() == "true",
+        "DOWNLOADER_MIDDLEWARES": {
+            "scrapy.downloadermiddlewares.useragent.UserAgentMiddleware": None,
+            "legal_scraper.middlewares.ScrapeOpsHeadersMiddleware": 400,
+            "legal_scraper.middlewares.ScrapeOpsProxyMiddleware": 410,
+        },
+    }
+
     def __init__(
         self,
         start_date: str | None = None,
@@ -94,7 +113,7 @@ class WorkplaceRelationsSpider(scrapy.Spider):
     # Scrapy lifecycle
     # ------------------------------------------------------------------
 
-    def start_requests(self) -> Iterator[Request]:
+    async def start(self) -> AsyncIterator[Request]:
         """Yield one GET request per (body × monthly partition)."""
         for body_name, body_value in self._bodies.items():
             for p_start, p_end in _monthly_partitions(self._start_date, self._end_date):

@@ -14,9 +14,6 @@ EXTENSIONS = {
 
 ROBOTSTXT_OBEY = True
 
-CONCURRENT_REQUESTS_PER_DOMAIN = int(os.environ.get("CONCURRENT_REQUESTS_PER_DOMAIN", 1))
-DOWNLOAD_DELAY = int(os.environ.get("DOWNLOAD_DELAY", 1))
-
 ITEM_PIPELINES = {
     "legal_scraper.pipelines.LandingZonePipeline": 200,
 }
@@ -37,9 +34,5 @@ MINIO_ROOT_USER = os.environ.get("MINIO_ROOT_USER", "minioadmin")
 MINIO_ROOT_PASSWORD = os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin123")
 MINIO_LANDING_BUCKET = os.environ.get("MINIO_LANDING_BUCKET", "landing-zone")
 MINIO_PROCESSED_BUCKET = os.environ.get("MINIO_PROCESSED_BUCKET", "processed-zone")
-
-# Scraping date range — used as fallback when spider args are not provided
-SCRAPE_START_DATE = os.environ.get("SCRAPE_START_DATE", "")
-SCRAPE_END_DATE = os.environ.get("SCRAPE_END_DATE", "")
 
 FEED_EXPORT_ENCODING = "utf-8"
