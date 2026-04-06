@@ -49,8 +49,6 @@ class Settings:
     minio_processed_bucket: str = field(default_factory=lambda: os.environ.get("MINIO_PROCESSED_BUCKET", "processed-zone"))
 
     # Scraping
-    scrape_start_date: str = field(default_factory=lambda: os.environ.get("SCRAPE_START_DATE", "01/01/2024"))
-    scrape_end_date: str = field(default_factory=lambda: os.environ.get("SCRAPE_END_DATE", "31/01/2024"))
     concurrent_requests_per_domain: int = field(default_factory=lambda: int(os.environ.get("CONCURRENT_REQUESTS_PER_DOMAIN", 1)))
     download_delay: int = field(default_factory=lambda: int(os.environ.get("DOWNLOAD_DELAY", 1)))
 
