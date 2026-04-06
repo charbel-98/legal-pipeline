@@ -18,5 +18,6 @@ class LegalCaseItem(scrapy.Item):
     content_html = scrapy.Field()
     path_to_file = scrapy.Field()
     file_hash = scrapy.Field()
+    scrape_status = scrapy.Field()
 
 

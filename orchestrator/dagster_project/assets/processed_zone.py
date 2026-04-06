@@ -11,43 +11,46 @@ The asset is downstream of landing_zone — Dagster enforces that the landing
 partition is materialised first, and the lineage graph shows the dependency.
 """
 
-from __future__ import annotations
-
 from datetime import datetime
 
 from dagster import (
     AssetExecutionContext,
-    AssetIn,
     MaterializeResult,
     MetadataValue,
+    MultiPartitionKey,
     asset,
 )
 
 from app.services.transformation_service import run_transformation
-from orchestrator.dagster_project.assets.landing_zone import monthly_partitions
+from orchestrator.dagster_project.assets.landing_zone import landing_zone, landing_zone_partitions
 from orchestrator.dagster_project.resources import MinIOResource, MongoResource
 
 
 @asset(
-    partitions_def=monthly_partitions,
-    ins={"landing_zone": AssetIn()},
+    partitions_def=landing_zone_partitions,
+    deps=[landing_zone],
     required_resource_keys={"mongo", "minio"},
     group_name="transformation",
     description=(
-        "Cleaned and transformed case files for one calendar month. "
+        "Cleaned and transformed case files for one legal body and one calendar month. "
         "Stored in MinIO processed-zone and MongoDB cases_processed. "
         "Downstream of landing_zone."
     ),
 )
 def processed_zone(
     context: AssetExecutionContext,
-    landing_zone: MaterializeResult,
 ) -> MaterializeResult:
-    """Transform one month of landing zone records into the processed zone."""
-    partition_dt = datetime.strptime(context.partition_key, "%Y-%m-%d")
+    """Transform one body × month of landing zone records into the processed zone."""
+    partition_key: MultiPartitionKey = context.partition_key  # type: ignore[assignment]
+    body = partition_key.keys_by_dimension["body"]
+    month_key = partition_key.keys_by_dimension["month"]
+
+    partition_dt = datetime.strptime(month_key, "%Y-%m-%d")
     partition_label = partition_dt.strftime("%Y-%m")
 
-    context.log.info("Materializing processed_zone | partition=%s", partition_label)
+    context.log.info(
+        "Materializing processed_zone | body=%s partition=%s", body, partition_label
+    )
 
     mongo: MongoResource = context.resources.mongo
     minio: MinIOResource = context.resources.minio
@@ -59,6 +62,7 @@ def processed_zone(
         result = run_transformation(
             start_month=partition_label,
             end_month=partition_label,
+            body=body,
             mongo_client=mongo_client,
             mongo_database=mongo.database,
             minio_client=minio_client,
@@ -71,13 +75,16 @@ def processed_zone(
 
     if result.failed > 0:
         context.log.warning(
-            "processed_zone | partition=%s failed=%d", partition_label, result.failed
+            "processed_zone | body=%s partition=%s failed=%d",
+            body,
+            partition_label,
+            result.failed,
         )
 
-    # Surface stats in the asset materialisation detail panel
     return MaterializeResult(
         metadata={
-            "partition": partition_label,
+            "body": MetadataValue.text(body),
+            "partition": MetadataValue.text(partition_label),
             "records_processed": MetadataValue.int(result.processed),
             "records_failed": MetadataValue.int(result.failed),
         }

@@ -1,189 +1,198 @@
-import hashlib
-import io
 import logging
 from datetime import datetime, timezone
 
 import pymongo
-from minio import Minio
-from minio.error import S3Error
 from scrapy import Spider
 from scrapy.exceptions import DropItem
 
+from app.repositories.landing_metadata_repository import LandingMetadataRepository
+from app.repositories.metadata_repository import MetadataRepository
+from app.storage.minio_store import MinioStore
+from app.storage.object_store import ObjectStore
+from app.utils.hashing import sha256_of_bytes
+from legal_scraper.services.item_cleaner import clean_item
+from legal_scraper.services.object_naming import build_object_key
+
 logger = logging.getLogger(__name__)
 
-
-def _compute_hash(data: bytes) -> str:
-    return hashlib.sha256(data).hexdigest()
+_DEFAULT_RETRY_ATTEMPTS = 3
 
 
-def _ext_for_content_type(content_type: str | None) -> str:
-    mapping = {
-        "application/pdf": "pdf",
-        "application/msword": "doc",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
-        "application/vnd.ms-word.document.macroenabled.12": "docm",
-        "text/html": "html",
-    }
-    return mapping.get(content_type or "", "bin")
-
-
-class MinIOLandingPipeline:
+class LandingZonePipeline:
     """
-    Stores raw scraped content (HTML or binary files) in the MinIO landing bucket.
+    Persists scraped items to the landing zone (MinIO + MongoDB).
 
-    - Runs before MongoDB so that path_to_file and file_hash are available
-      when the metadata record is written.
-    - Idempotent: if the object already exists with the same hash it is not
-      re-uploaded. If the content changed the object is overwritten.
-    - Object key pattern: landing/{partition_date}/{identifier}.{ext}
+    Dedup logic: checks MongoDB first. If the existing record has the same
+    file_hash and a path_to_file, the upload is skipped entirely (cheaper
+    than hitting MinIO on every item). MinIO is only contacted when content
+    has actually changed or is new.
+
+    Idempotent: running the same date range twice produces the same state.
     """
 
-    def __init__(self, settings):
-        self._endpoint = f"{settings.get('MINIO_HOST')}:{settings.getint('MINIO_PORT')}"
-        self._access_key = settings.get("MINIO_ROOT_USER")
-        self._secret_key = settings.get("MINIO_ROOT_PASSWORD")
-        self._bucket = settings.get("MINIO_LANDING_BUCKET")
-        self._client: Minio | None = None
+    def __init__(
+        self,
+        object_store: ObjectStore,
+        metadata_repo: MetadataRepository,
+        retry_attempts: int = _DEFAULT_RETRY_ATTEMPTS,
+    ) -> None:
+        self._store = object_store
+        self._repo = metadata_repo
+        self._retry_attempts = retry_attempts
+        self._crawler = None
 
     @classmethod
     def from_crawler(cls, crawler):
-        return cls(crawler.settings)
-
-    def open_spider(self, spider: Spider):
-        self._client = Minio(
-            self._endpoint,
-            access_key=self._access_key,
-            secret_key=self._secret_key,
-            secure=False,
+        settings = crawler.settings
+        endpoint = f"{settings.get('MINIO_HOST')}:{settings.getint('MINIO_PORT')}"
+        store = MinioStore(
+            endpoint=endpoint,
+            access_key=settings.get("MINIO_ROOT_USER"),
+            secret_key=settings.get("MINIO_ROOT_PASSWORD"),
+            bucket=settings.get("MINIO_LANDING_BUCKET"),
         )
-        if not self._client.bucket_exists(self._bucket):
-            self._client.make_bucket(self._bucket)
-        logger.info(
-            "MinIOLandingPipeline ready | endpoint=%s bucket=%s",
-            self._endpoint,
-            self._bucket,
+        mongo_client = pymongo.MongoClient(
+            host=settings.get("MONGO_HOST"),
+            port=settings.getint("MONGO_PORT"),
+            username=settings.get("MONGO_APP_USERNAME"),
+            password=settings.get("MONGO_APP_PASSWORD"),
+            authSource=settings.get("MONGO_APP_DATABASE"),
         )
-
-    def process_item(self, item, spider: Spider):
-        identifier = item.get("identifier")
-        if not identifier:
-            raise DropItem("Item has no identifier — cannot store file.")
-
-        content_type = item.get("content_type")
-        ext = _ext_for_content_type(content_type)
-        partition = item.get("partition_date") or "unknown"
-        object_key = f"landing/{partition}/{identifier}.{ext}"
-
-        # Resolve raw bytes from whichever field the spider populated
-        raw: bytes | None = item.get("content_bytes") or (
-            item.get("content_html").encode("utf-8")
-            if item.get("content_html")
-            else None
+        repo = LandingMetadataRepository(
+            client=mongo_client,
+            database=settings.get("MONGO_APP_DATABASE"),
         )
-
-        if not raw:
-            logger.warning("No content to store for %s — skipping upload.", identifier)
-            return item
-
-        file_hash = _compute_hash(raw)
-
-        # Check for existing object — skip upload if hash unchanged
-        try:
-            stat = self._client.stat_object(self._bucket, object_key)
-            existing_hash = (stat.metadata or {}).get("x-amz-meta-file-hash", "")
-            if existing_hash == file_hash:
-                logger.debug("Unchanged file, skipping upload | key=%s", object_key)
-                item["path_to_file"] = object_key
-                item["file_hash"] = file_hash
-                return item
-        except S3Error:
-            pass  # Object does not exist yet
-
-        self._client.put_object(
-            self._bucket,
-            object_key,
-            io.BytesIO(raw),
-            length=len(raw),
-            content_type=content_type or "application/octet-stream",
-            metadata={"file-hash": file_hash},
-        )
-
-        logger.info(
-            "Uploaded | key=%s size=%d hash=%s", object_key, len(raw), file_hash
-        )
-
-        item["path_to_file"] = object_key
-        item["file_hash"] = file_hash
-        return item
-
-
-class MongoLandingPipeline:
-    """
-    Upserts case metadata into the MongoDB landing collection.
-
-    - Runs after MinIOLandingPipeline so path_to_file and file_hash are set.
-    - Upserts by identifier — running twice on the same range will update
-      the existing record rather than create a duplicate (idempotent).
-    - Raw content bytes/html are stripped before storing — they live in MinIO.
-    - Landing data is never deleted or moved; transformation writes to a
-      separate collection (cases_processed).
-    """
-
-    LANDING_COLLECTION = "cases_landing"
-
-    def __init__(self, settings):
-        self._host = settings.get("MONGO_HOST")
-        self._port = settings.getint("MONGO_PORT")
-        self._database = settings.get("MONGO_APP_DATABASE")
-        self._username = settings.get("MONGO_APP_USERNAME")
-        self._password = settings.get("MONGO_APP_PASSWORD")
-        self._client: pymongo.MongoClient | None = None
-        self._collection = None
-
-    @classmethod
-    def from_crawler(cls, crawler):
-        return cls(crawler.settings)
-
-    def open_spider(self, spider: Spider):
-        self._client = pymongo.MongoClient(
-            host=self._host,
-            port=self._port,
-            username=self._username,
-            password=self._password,
-            authSource=self._database,
-        )
-        db = self._client[self._database]
-        self._collection = db[self.LANDING_COLLECTION]
-        logger.info(
-            "MongoLandingPipeline ready | %s:%s/%s/%s",
-            self._host,
-            self._port,
-            self._database,
-            self.LANDING_COLLECTION,
-        )
+        retry_attempts = settings.getint("LANDING_RETRY_ATTEMPTS", _DEFAULT_RETRY_ATTEMPTS)
+        pipeline = cls(object_store=store, metadata_repo=repo, retry_attempts=retry_attempts)
+        pipeline._crawler = crawler
+        return pipeline
 
     def close_spider(self, spider: Spider):
-        if self._client:
-            self._client.close()
+        # MongoClient is managed externally in tests; only close when created here.
+        if hasattr(self._repo, "_col"):
+            try:
+                self._repo._col.database.client.close()
+            except Exception:
+                pass
+
+    # ------------------------------------------------------------------
+    # Scrapy item pipeline entry point
+    # ------------------------------------------------------------------
 
     def process_item(self, item, spider: Spider):
+        try:
+            return self._process_item(item, spider)
+        except DropItem:
+            raise
+        except Exception as exc:
+            self._inc("landing_pipeline/failed")
+            identifier = str(item.get("identifier") or "unknown")
+            logger.error(
+                "landing_pipeline_failed | identifier=%s error=%s",
+                identifier,
+                exc,
+                exc_info=True,
+            )
+            raise DropItem(f"Failed to persist {identifier}: {exc}") from exc
+
+    # ------------------------------------------------------------------
+    # Internal implementation
+    # ------------------------------------------------------------------
+
+    def _process_item(self, item, spider: Spider):
+        clean_item(item)
+
         identifier = item.get("identifier")
         if not identifier:
-            raise DropItem("Item has no identifier — cannot store metadata.")
+            raise DropItem("Item has no identifier.")
 
-        doc = dict(item)
+        payload = self._build_payload(item)
+        file_hash = sha256_of_bytes(payload)
 
-        # Raw content must not be persisted in MongoDB
-        doc.pop("content_bytes", None)
-        doc.pop("content_html", None)
+        # --- MongoDB-first dedup check (cheaper than a MinIO stat_object) ---
+        existing = self._repo.get_by_identifier(str(identifier))
+        if existing and existing.get("file_hash") == file_hash and existing.get("path_to_file"):
+            path_to_file = str(existing["path_to_file"])
+            scrape_status = "unchanged"
+            self._inc("landing_pipeline/unchanged")
+            logger.debug("Unchanged, skipping upload | identifier=%s", identifier)
+        else:
+            object_key = build_object_key(
+                source=str(item.get("source") or "unknown"),
+                body=str(item.get("body") or "unknown"),
+                partition_date=str(item.get("partition_date") or "unknown"),
+                identifier=str(identifier),
+                content_type=str(item.get("content_type") or ""),
+                file_name=item.get("file_name"),
+                document_url=item.get("link_to_doc"),
+            )
+            self._with_retries(
+                "upload",
+                self._store.upload,
+                key=object_key,
+                data=payload,
+                content_type=str(item.get("content_type") or "application/octet-stream"),
+                file_hash=file_hash,
+            )
+            path_to_file = object_key
+            scrape_status = "stored"
+            self._inc("landing_pipeline/stored")
+            logger.info(
+                "Uploaded | key=%s size=%d hash=%s", object_key, len(payload), file_hash
+            )
 
+        doc = {k: v for k, v in dict(item).items() if k not in ("content_bytes", "content_html")}
+        doc["path_to_file"] = path_to_file
+        doc["file_hash"] = file_hash
+        doc["scrape_status"] = scrape_status
         doc["scraped_at"] = datetime.now(timezone.utc).isoformat()
 
-        self._collection.update_one(
-            {"identifier": identifier},
-            {"$set": doc},
-            upsert=True,
+        self._with_retries(
+            "upsert_metadata",
+            self._repo.upsert,
+            identifier=str(identifier),
+            document=doc,
         )
 
-        logger.debug("Upserted metadata | identifier=%s", identifier)
+        item["path_to_file"] = path_to_file
+        item["file_hash"] = file_hash
+        item["scrape_status"] = scrape_status
+        # Clear raw content from item — it now lives in MinIO only
+        item["content_bytes"] = None
+        item["content_html"] = None
         return item
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    def _build_payload(self, item) -> bytes:
+        if item.get("content_bytes"):
+            raw = item["content_bytes"]
+            return raw if isinstance(raw, bytes) else bytes(raw)
+        if item.get("content_html"):
+            return str(item["content_html"]).encode("utf-8")
+        return str(item.get("link_to_doc") or "").encode("utf-8")
+
+    def _with_retries(self, operation: str, func, **kwargs):
+        last_exc: Exception | None = None
+        for attempt in range(1, self._retry_attempts + 1):
+            try:
+                return func(**kwargs)
+            except Exception as exc:
+                last_exc = exc
+                if attempt < self._retry_attempts:
+                    self._inc("landing_pipeline/retries")
+                    logger.warning(
+                        "Retrying %s (attempt %d/%d) | error=%s",
+                        operation,
+                        attempt,
+                        self._retry_attempts,
+                        exc,
+                    )
+        assert last_exc is not None
+        raise last_exc
+
+    def _inc(self, key: str) -> None:
+        if self._crawler is not None:
+            self._crawler.stats.inc_value(key)

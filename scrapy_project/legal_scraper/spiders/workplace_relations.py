@@ -19,9 +19,8 @@ import calendar
 import logging
 from datetime import date, datetime
 from typing import Iterator
-
 import scrapy
-from scrapy.http import FormRequest, Request, Response
+from scrapy.http import Request, Response
 
 from legal_scraper.items import LegalCaseItem
 from legal_scraper.parsers.document_page_parser import (
@@ -38,15 +37,14 @@ logger = logging.getLogger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_SEARCH_URL = "https://www.workplacerelations.ie/en/search/?advance=true"
+_SEARCH_URL = "https://www.workplacerelations.ie/en/search/"
 
-# Maps human-readable body name → (form field name, form field value).
-# Values confirmed by inspecting the live search form.
-_BODIES: dict[str, tuple[str, str]] = {
-    "Employment Appeals Tribunal": ("ctl00$ContentPlaceHolder_Main$CB2$CB2_0", "2"),
-    "Equality Tribunal": ("ctl00$ContentPlaceHolder_Main$CB2$CB2_1", "1"),
-    "Labour Court": ("ctl00$ContentPlaceHolder_Main$CB2$CB2_2", "3"),
-    "Workplace Relations Commission": ("ctl00$ContentPlaceHolder_Main$CB2$CB2_3", "15376"),
+# Maps human-readable body name → body query parameter value.
+_BODIES: dict[str, str] = {
+    "Employment Appeals Tribunal": "2",
+    "Equality Tribunal": "1",
+    "Labour Court": "3",
+    "Workplace Relations Commission": "15376",
 }
 
 _DATE_FMT = "%d/%m/%Y"
@@ -83,7 +81,7 @@ class WorkplaceRelationsSpider(scrapy.Spider):
             selected = {b.strip() for b in bodies.split(",")}
             self._bodies = {k: v for k, v in _BODIES.items() if k in selected}
         else:
-            self._bodies = _BODIES
+            self._bodies = dict(_BODIES)
 
         logger.info(
             '{"event": "spider_init", "start_date": "%s", "end_date": "%s", "bodies": %s}',
@@ -97,18 +95,10 @@ class WorkplaceRelationsSpider(scrapy.Spider):
     # ------------------------------------------------------------------
 
     def start_requests(self) -> Iterator[Request]:
-        """Yield one FormRequest per (body × monthly partition)."""
-        for body_name, (field_name, field_value) in self._bodies.items():
+        """Yield one GET request per (body × monthly partition)."""
+        for body_name, body_value in self._bodies.items():
             for p_start, p_end in _monthly_partitions(self._start_date, self._end_date):
                 partition_date = p_start.strftime("%Y-%m")
-
-                formdata = {
-                    "ctl00$ContentPlaceHolder_Main$TextBox1": "",
-                    "ctl00$ContentPlaceHolder_Main$TextBox2": p_start.strftime(_DATE_FMT),
-                    "ctl00$ContentPlaceHolder_Main$TextBox3": p_end.strftime(_DATE_FMT),
-                    field_name: field_value,
-                    "ctl00$ContentPlaceHolder_Main$refine_btn": "",
-                }
 
                 logger.info(
                     '{"event": "partition_requested", "body": "%s", "partition": "%s"}',
@@ -116,9 +106,15 @@ class WorkplaceRelationsSpider(scrapy.Spider):
                     partition_date,
                 )
 
-                yield FormRequest(
-                    url=_SEARCH_URL,
-                    formdata=formdata,
+                url = (
+                    f"{_SEARCH_URL}?decisions=1"
+                    f"&from={p_start.strftime(_DATE_FMT)}"
+                    f"&to={p_end.strftime(_DATE_FMT)}"
+                    f"&legislationsub=&body={body_value}"
+                )
+
+                yield Request(
+                    url=url,
                     callback=self.parse_results,
                     meta={
                         "body": body_name,
@@ -156,11 +152,11 @@ class WorkplaceRelationsSpider(scrapy.Spider):
                 continue
 
             partial_item = LegalCaseItem(
-                identifier=case.css("h2.title").attrib.get("title", ""),
-                title=case.css("h2.title").attrib.get("title", ""),
-                description=case.css("p.description::text").get(default=""),
-                case_number=case.css("span.refNO::text").get(default=""),
-                record_date=case.css("span.date::text").get(default=""),
+                identifier=case.css("span.refNO::text").get(),
+                title=case.css("h2.title a::text").get(),
+                description=case.css("p.description::text").get(),
+                case_number=case.css("span.refNO::text").get(),
+                record_date=case.css("span.date::text").get(),
                 source="Workplace Relations Commission",
                 body=body,
                 partition_date=partition_date,

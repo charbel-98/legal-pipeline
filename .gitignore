@@ -39,6 +39,7 @@ storage/curated/*
 # Dagster local storage
 $DAGSTER_HOME/
 .dagster/
+.tmp_dagster_home_*/
 
 # Environment variables
 .env

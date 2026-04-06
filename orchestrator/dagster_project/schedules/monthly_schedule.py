@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import calendar
 from datetime import date
+from typing import Iterator
 
-from dagster import RunRequest, ScheduleEvaluationContext, schedule
+from dagster import MultiPartitionKey, RunRequest, ScheduleEvaluationContext, schedule
 
+from orchestrator.dagster_project.assets.landing_zone import _BODIES
 from orchestrator.dagster_project.jobs.full_pipeline_job import full_pipeline_job
 
 
@@ -16,11 +17,11 @@ from orchestrator.dagster_project.jobs.full_pipeline_job import full_pipeline_jo
     name="monthly_full_pipeline",
     description=(
         "Automatically scrape and transform the previous calendar month "
-        "on the 1st of each month."
+        "for all four legal bodies on the 1st of each month."
     ),
 )
-def monthly_schedule(context: ScheduleEvaluationContext) -> RunRequest:
-    """Compute the partition key for the previous calendar month at schedule time."""
+def monthly_schedule(context: ScheduleEvaluationContext) -> Iterator[RunRequest]:
+    """Emit one RunRequest per legal body for the previous calendar month."""
     today = (
         context.scheduled_execution_time.date()
         if context.scheduled_execution_time
@@ -33,10 +34,11 @@ def monthly_schedule(context: ScheduleEvaluationContext) -> RunRequest:
     else:
         prev_year, prev_month = first_of_current.year, first_of_current.month - 1
 
-    # MonthlyPartitionsDefinition keys are YYYY-MM-DD (first of the month)
-    partition_key = f"{prev_year}-{prev_month:02d}-01"
+    month_key = f"{prev_year}-{prev_month:02d}-01"
 
-    return RunRequest(
-        run_key=partition_key,
-        partition_key=partition_key,
-    )
+    for body in _BODIES:
+        partition_key = MultiPartitionKey({"body": body, "month": month_key})
+        yield RunRequest(
+            run_key=f"{month_key}|{body}",
+            partition_key=partition_key,
+        )

@@ -17,7 +17,7 @@ _CONTENT_SELECTORS = [
 
 def clean_html(raw: bytes) -> bytes:
     """Strip chrome from raw HTML bytes and return cleaned bytes."""
-    soup = BeautifulSoup(raw, "html.parser")
+    soup = BeautifulSoup(raw.decode("utf-8", errors="replace"), "html.parser")
 
     for tag_name in _STRIP_TAGS:
         for tag in soup.find_all(tag_name):

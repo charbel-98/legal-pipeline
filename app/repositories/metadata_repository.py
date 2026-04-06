@@ -11,3 +11,6 @@ class MetadataRepository(ABC):
 
     @abstractmethod
     def find_by_partition_range(self, start_month: str, end_month: str) -> list[dict]: ...
+
+    @abstractmethod
+    def get_by_identifier(self, identifier: str) -> dict | None: ...

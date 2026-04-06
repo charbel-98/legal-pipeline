@@ -8,17 +8,20 @@ NEWSPIDER_MODULE = "legal_scraper.spiders"
 
 ADDONS: dict[str, Any] = {}
 
+EXTENSIONS = {
+    "legal_scraper.extensions.stats_exporter.StatsExporterExtension": 100,
+}
+
 ROBOTSTXT_OBEY = True
 
 CONCURRENT_REQUESTS_PER_DOMAIN = int(os.environ.get("CONCURRENT_REQUESTS_PER_DOMAIN", 1))
 DOWNLOAD_DELAY = int(os.environ.get("DOWNLOAD_DELAY", 1))
 
 ITEM_PIPELINES = {
-    # MinIO runs first (priority 200) so path_to_file/file_hash are set
-    # before the MongoDB pipeline writes the metadata record.
-    "legal_scraper.pipelines.MinIOLandingPipeline": 200,
-    "legal_scraper.pipelines.MongoLandingPipeline": 300,
+    "legal_scraper.pipelines.LandingZonePipeline": 200,
 }
+
+LANDING_RETRY_ATTEMPTS = int(os.environ.get("LANDING_RETRY_ATTEMPTS", 3))
 
 # MongoDB — landing zone
 MONGO_HOST = os.environ.get("MONGO_HOST", "localhost")

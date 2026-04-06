@@ -1,15 +1,3 @@
-instance_class:
-  module: dagster._core.instance
-  class: DagsterInstance
-
 storage:
   sqlite:
     base_dir: .dagster
-
-run_launcher:
-  module: dagster._core.launcher.default_run_launcher
-  class: DefaultRunLauncher
-
-run_coordinator:
-  module: dagster.core.run_coordinator
-  class: DefaultRunCoordinator

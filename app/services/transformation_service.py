@@ -66,7 +66,7 @@ _CONTENT_SELECTORS = [
 
 def _process_html(raw: bytes) -> tuple[bytes, str]:
     """Strip chrome from an HTML file and return (cleaned_bytes, sha256_hash)."""
-    soup = BeautifulSoup(raw, "html.parser")
+    soup = BeautifulSoup(raw.decode("utf-8", errors="replace"), "html.parser")
 
     for tag_name in _STRIP_TAGS:
         for tag in soup.find_all(tag_name):
@@ -79,8 +79,13 @@ def _process_html(raw: bytes) -> tuple[bytes, str]:
             content_node = results[0]
             break
 
-    serialized = str(content_node if content_node else soup.body or soup)
-    cleaned = serialized.encode("utf-8")
+    node = content_node if content_node else soup.body or soup
+    html_out = (
+        '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>'
+        + str(node)
+        + "</body></html>"
+    )
+    cleaned = html_out.encode("utf-8")
     return cleaned, hashlib.sha256(cleaned).hexdigest()
 
 
@@ -148,6 +153,7 @@ def _process_record(
     content_type = record.get("content_type", "")
     path_to_file = record.get("path_to_file", "")
     partition_date = record.get("partition_date", "unknown")
+    body = (record.get("body") or "unknown").replace(" ", "_")
 
     if not path_to_file:
         log(f"Skipping {identifier}: no path_to_file")
@@ -156,7 +162,7 @@ def _process_record(
     raw = _download_file(minio_client, landing_bucket, path_to_file)
 
     ext = _ext_for_content_type(content_type)
-    new_key = f"processed/{partition_date}/{identifier}.{ext}"
+    new_key = f"{body}/{partition_date}/{identifier}.{ext}"
 
     if content_type == "text/html":
         processed_bytes, file_hash = _process_html(raw)
@@ -197,6 +203,7 @@ def run_transformation(
     minio_client: Minio,
     landing_bucket: str,
     processed_bucket: str,
+    body: str | None = None,
     log: Callable[[str], None] | None = None,
 ) -> TransformResult:
     """Transform landing records for a month range into the processed zone.
@@ -227,9 +234,10 @@ def run_transformation(
     if not minio_client.bucket_exists(processed_bucket):
         minio_client.make_bucket(processed_bucket)
 
-    records = list(
-        landing_col.find({"partition_date": {"$gte": start_month, "$lte": end_month}})
-    )
+    query: dict = {"partition_date": {"$gte": start_month, "$lte": end_month}}
+    if body:
+        query["body"] = body
+    records = list(landing_col.find(query))
 
     log(f"Transform started: {start_month} → {end_month} | {len(records)} records")
 

@@ -20,3 +20,6 @@ class LandingMetadataRepository(MetadataRepository):
         return list(
             self._col.find({"partition_date": {"$gte": start_month, "$lte": end_month}})
         )
+
+    def get_by_identifier(self, identifier: str) -> dict | None:
+        return self._col.find_one({"identifier": identifier}, {"_id": 0})
