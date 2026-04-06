@@ -116,17 +116,7 @@ def _upload_file(
     data: bytes,
     content_type: str,
     file_hash: str,
-    log: Callable[[str], None],
 ) -> None:
-    try:
-        stat = client.stat_object(bucket, key)
-        existing_hash = (stat.metadata or {}).get("x-amz-meta-file-hash", "")
-        if existing_hash == file_hash:
-            log(f"Skipped (unchanged): {key}")
-            return
-    except S3Error:
-        pass
-
     client.put_object(
         bucket,
         key,
@@ -172,7 +162,7 @@ def _process_record(
         file_hash = hashlib.sha256(raw).hexdigest()
 
     _upload_file(minio_client, processed_bucket, new_key, processed_bytes,
-                 content_type or "application/octet-stream", file_hash, log)
+                 content_type or "application/octet-stream", file_hash)
 
     processed_doc = {k: v for k, v in record.items() if k != "_id"}
     processed_doc["path_to_file"] = new_key
