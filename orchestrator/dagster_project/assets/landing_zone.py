@@ -25,18 +25,12 @@ from dagster import (
     asset,
 )
 
+from app.constants import ALL_BODY_NAMES
 from app.services.ingestion_service import run_scrape
-
-_BODIES = [
-    "Employment Appeals Tribunal",
-    "Equality Tribunal",
-    "Labour Court",
-    "Workplace Relations Commission",
-]
 
 landing_zone_partitions = MultiPartitionsDefinition(
     {
-        "body": StaticPartitionsDefinition(_BODIES),
+        "body": StaticPartitionsDefinition(ALL_BODY_NAMES),
         "month": MonthlyPartitionsDefinition(start_date="2012-01-01"),
     }
 )

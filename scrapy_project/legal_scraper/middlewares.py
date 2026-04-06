@@ -61,8 +61,11 @@ class ScrapeOpsProxyMiddleware:
     def process_request(self, request):
         if not self.enabled or request.meta.get("scrapeops_proxy_applied"):
             return None
-        proxied_url = f"https://proxy.scrapeops.io/v1/?api_key={self.api_key}&url={request.url}"
+        # Pass the API key as a header instead of embedding it in the URL to
+        # prevent the key from appearing in Scrapy logs and error reports.
+        proxied_url = f"https://proxy.scrapeops.io/v1/?url={request.url}"
         request = request.replace(url=proxied_url)
+        request.headers["X-ScrapeOps-API-Key"] = self.api_key
         request.meta["scrapeops_proxy_applied"] = True
         return request
 

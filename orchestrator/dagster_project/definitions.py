@@ -28,6 +28,8 @@ defs = Definitions(
             endpoint=EnvVar("MINIO_ENDPOINT"),
             access_key=EnvVar("MINIO_ROOT_USER"),
             secret_key=EnvVar("MINIO_ROOT_PASSWORD"),
+            landing_bucket=EnvVar("MINIO_LANDING_BUCKET"),
+            processed_bucket=EnvVar("MINIO_PROCESSED_BUCKET"),
         ),
     },
 )

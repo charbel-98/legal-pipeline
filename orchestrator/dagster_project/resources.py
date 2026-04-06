@@ -29,6 +29,8 @@ class MinIOResource(ConfigurableResource):
     access_key: str
     secret_key: str
     secure: bool = False
+    landing_bucket: str = "landing-zone"
+    processed_bucket: str = "processed-zone"
 
     def get_client(self) -> Minio:
         return Minio(

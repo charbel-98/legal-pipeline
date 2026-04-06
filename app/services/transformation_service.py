@@ -22,6 +22,7 @@ import hashlib
 import io
 import os
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -66,7 +67,7 @@ _CONTENT_SELECTORS = [
 
 def _process_html(raw: bytes) -> tuple[bytes, str]:
     """Strip chrome from an HTML file and return (cleaned_bytes, sha256_hash)."""
-    soup = BeautifulSoup(raw.decode("utf-8", errors="replace"), "html.parser")
+    soup = BeautifulSoup(raw.decode("utf-8", errors="replace"), "lxml")
 
     for tag_name in _STRIP_TAGS:
         for tag in soup.find_all(tag_name):
@@ -237,21 +238,39 @@ def run_transformation(
     query: dict = {"partition_date": {"$gte": start_month, "$lte": end_month}}
     if body:
         query["body"] = body
-    records = list(landing_col.find(query))
 
-    log(f"Transform started: {start_month} → {end_month} | {len(records)} records")
+    # Use a cursor with batch_size to avoid loading all records into memory at once.
+    cursor = landing_col.find(query).batch_size(200)
+    total = landing_col.count_documents(query)
+    log(f"Transform started: {start_month} → {end_month} | {total} records")
 
     success_count = 0
     fail_count = 0
 
-    for record in records:
-        identifier = record.get("identifier", "<unknown>")
-        try:
-            _process_record(record, minio_client, landing_bucket, processed_bucket, processed_col, log)
-            success_count += 1
-        except Exception as exc:
-            fail_count += 1
-            log(f"Failed: {identifier} — {exc}")
+    # Process records concurrently — each record is independent (download +
+    # transform + upload), so I/O-bound work benefits significantly from threading.
+    max_workers = int(os.environ.get("TRANSFORM_MAX_WORKERS", 8))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                _process_record,
+                record,
+                minio_client,
+                landing_bucket,
+                processed_bucket,
+                processed_col,
+                log,
+            ): record.get("identifier", "<unknown>")
+            for record in cursor
+        }
+        for future in as_completed(futures):
+            identifier = futures[future]
+            try:
+                future.result()
+                success_count += 1
+            except Exception as exc:
+                fail_count += 1
+                log(f"Failed: {identifier} — {exc}")
 
     log(f"Transform complete: {success_count} processed, {fail_count} failed")
     return TransformResult(start_month, end_month, success_count, fail_count)

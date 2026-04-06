@@ -18,22 +18,33 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 
+def _require_env(name: str) -> str:
+    """Read a required environment variable; raise at startup if missing."""
+    value = os.environ.get(name)
+    if not value:
+        raise EnvironmentError(
+            f"Required environment variable '{name}' is not set. "
+            "Copy .env.example to .env and fill in the values."
+        )
+    return value
+
+
 @dataclass(frozen=True)
 class Settings:
     # MongoDB
     mongo_host: str = field(default_factory=lambda: os.environ.get("MONGO_HOST", "localhost"))
     mongo_port: int = field(default_factory=lambda: int(os.environ.get("MONGO_PORT", 27018)))
-    mongo_root_username: str = field(default_factory=lambda: os.environ.get("MONGO_ROOT_USERNAME", "admin"))
-    mongo_root_password: str = field(default_factory=lambda: os.environ.get("MONGO_ROOT_PASSWORD", "adminpassword"))
+    mongo_root_username: str = field(default_factory=lambda: _require_env("MONGO_ROOT_USERNAME"))
+    mongo_root_password: str = field(default_factory=lambda: _require_env("MONGO_ROOT_PASSWORD"))
     mongo_database: str = field(default_factory=lambda: os.environ.get("MONGO_APP_DATABASE", "legal_cases"))
-    mongo_username: str = field(default_factory=lambda: os.environ.get("MONGO_APP_USERNAME", "scrapy_user"))
-    mongo_password: str = field(default_factory=lambda: os.environ.get("MONGO_APP_PASSWORD", "scrapy_password"))
+    mongo_username: str = field(default_factory=lambda: _require_env("MONGO_APP_USERNAME"))
+    mongo_password: str = field(default_factory=lambda: _require_env("MONGO_APP_PASSWORD"))
 
     # MinIO
     minio_host: str = field(default_factory=lambda: os.environ.get("MINIO_HOST", "localhost"))
     minio_port: int = field(default_factory=lambda: int(os.environ.get("MINIO_PORT", 9000)))
-    minio_root_user: str = field(default_factory=lambda: os.environ.get("MINIO_ROOT_USER", "minioadmin"))
-    minio_root_password: str = field(default_factory=lambda: os.environ.get("MINIO_ROOT_PASSWORD", "minioadmin123"))
+    minio_root_user: str = field(default_factory=lambda: _require_env("MINIO_ROOT_USER"))
+    minio_root_password: str = field(default_factory=lambda: _require_env("MINIO_ROOT_PASSWORD"))
     minio_landing_bucket: str = field(default_factory=lambda: os.environ.get("MINIO_LANDING_BUCKET", "landing-zone"))
     minio_processed_bucket: str = field(default_factory=lambda: os.environ.get("MINIO_PROCESSED_BUCKET", "processed-zone"))
 

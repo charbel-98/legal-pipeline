@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 
 _SEARCH_URL = "https://www.workplacerelations.ie/en/search/"
 
-# Maps human-readable body name → body query parameter value.
+# Maps human-readable body name → body query parameter value used by the search API.
 _BODIES: dict[str, str] = {
     "Employment Appeals Tribunal": "2",
     "Equality Tribunal": "1",

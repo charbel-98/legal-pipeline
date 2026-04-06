@@ -66,8 +66,8 @@ def processed_zone(
             mongo_client=mongo_client,
             mongo_database=mongo.database,
             minio_client=minio_client,
-            landing_bucket="landing-zone",
-            processed_bucket="processed-zone",
+            landing_bucket=minio.landing_bucket,
+            processed_bucket=minio.processed_bucket,
             log=context.log.info,
         )
     finally:

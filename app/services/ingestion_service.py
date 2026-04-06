@@ -10,14 +10,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_SCRAPY_PROJECT_DIR = Path(__file__).parent.parent.parent / "scrapy_project"
+from app.constants import ALL_BODY_NAMES
 
-_ALL_BODIES = [
-    "Employment Appeals Tribunal",
-    "Equality Tribunal",
-    "Labour Court",
-    "Workplace Relations Commission",
-]
+_SCRAPY_PROJECT_DIR = Path(__file__).parent.parent.parent / "scrapy_project"
 
 
 @dataclass
@@ -57,7 +52,7 @@ def run_scrape(
     """
     log = log or print
     cwd = scrapy_project_dir or _SCRAPY_PROJECT_DIR
-    selected_bodies = bodies or _ALL_BODIES
+    selected_bodies = bodies or ALL_BODY_NAMES
 
     # Temp file for Scrapy to write stats into after spider closes
     stats_fd, stats_path = tempfile.mkstemp(suffix=".json", prefix="scrapy_stats_")
@@ -78,19 +73,40 @@ def run_scrape(
     env["PYTHONPATH"] = project_root + (f":{env['PYTHONPATH']}" if env.get("PYTHONPATH") else "")
 
     log(f"Running: {' '.join(cmd)} (cwd={cwd})")
-    proc = subprocess.run(cmd, cwd=cwd, env=env, check=False)
+    proc = subprocess.run(
+        cmd,
+        cwd=cwd,
+        env=env,
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+
+    # Forward every line from the spider subprocess to the caller's logger so
+    # Dagster run logs (and CLI output) contain the full Scrapy output.
+    if proc.stdout:
+        for line in proc.stdout.splitlines():
+            log(line)
 
     raw_stats: dict = {}
+    stats_missing = False
     try:
         with open(stats_path, encoding="utf-8") as fh:
             raw_stats = json.load(fh)
-    except (FileNotFoundError, json.JSONDecodeError):
-        pass
+    except FileNotFoundError:
+        stats_missing = True
+        log("WARNING: Scrapy stats file not found — spider may have crashed before writing stats.")
+    except json.JSONDecodeError as exc:
+        log(f"WARNING: Could not parse Scrapy stats file: {exc}")
     finally:
         try:
             os.unlink(stats_path)
         except OSError:
             pass
+
+    if proc.returncode != 0 and stats_missing:
+        log(f"ERROR: Scrapy exited with code {proc.returncode} and produced no stats.")
 
     return ScrapeResult(
         returncode=proc.returncode,
