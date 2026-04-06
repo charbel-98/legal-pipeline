@@ -6,7 +6,7 @@ ifneq (,$(wildcard .env))
 endif
 
 .PHONY: install up down restart logs scrape transform dagster-dev \
-        test test-unit test-integration bootstrap reset-db help
+        test test-unit test-integration bootstrap reset-db reset-db-confirm help
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 help:
@@ -20,7 +20,8 @@ help:
 	@echo "  restart          Stop then start containers"
 	@echo "  logs             Tail container logs"
 	@echo "  bootstrap        Check connectivity to MongoDB and MinIO"
-	@echo "  reset-db         Wipe all data and restart containers (destructive)"
+	@echo "  reset-db         Show reset warning"
+	@echo "  reset-db-confirm Wipe all data and restart containers (destructive)"
 	@echo ""
 	@echo "Pipeline"
 	@echo "  scrape           Run the Scrapy spider"
@@ -57,13 +58,15 @@ logs:
 	docker compose logs -f
 
 bootstrap:
-	poetry run python scripts/bootstrap_dev.py
+	PYTHONPATH=$(CURDIR) poetry run python scripts/bootstrap_dev.py
 
 reset-db:
 	@echo "WARNING: This will delete all data in MongoDB and MinIO."
-	@read -p "Press Enter to continue, Ctrl-C to abort..." _
-	docker compose down -v
-	rm -rf mongo_data/* minio_data/*
+	@echo "Run 'make reset-db-confirm' to proceed."
+
+reset-db-confirm:
+	docker compose down
+	rm -rf mongo_data minio_data && mkdir mongo_data minio_data
 	docker compose up -d
 
 # ── Scraping ──────────────────────────────────────────────────────────────────

@@ -8,14 +8,12 @@ from orchestrator.dagster_project.jobs.full_pipeline_job import full_pipeline_jo
 from orchestrator.dagster_project.jobs.scrape_job import scrape_job
 from orchestrator.dagster_project.jobs.transform_job import transform_job
 from orchestrator.dagster_project.resources import MinIOResource, MongoResource
-from orchestrator.dagster_project.schedules.monthly_schedule import monthly_schedule
 
 all_assets = load_assets_from_modules([landing_zone_module, processed_zone_module])
 
 defs = Definitions(
     assets=all_assets,
     jobs=[scrape_job, transform_job, full_pipeline_job],
-    schedules=[monthly_schedule],
     resources={
         "mongo": MongoResource(
             host=EnvVar("MONGO_HOST"),

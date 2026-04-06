@@ -16,7 +16,6 @@ you a UI to watch it all happen.
 | **Job** | A selection of assets (or ops) packaged together so you can run them in one click. | `scrapy crawl` for a set of spiders. |
 | **Schedule** | A cron rule attached to a job. Dagster runs the job automatically on that cadence. | A cron job that calls `scrapy crawl`. |
 | **Resource** | A configured connection (database, object store, …) that assets and ops share. | Scrapy `ITEM_PIPELINES` settings wired to a database. |
-| **Op** | A lower-level building block. An asset is essentially a named op whose output is tracked. This project uses ops inside jobs for imperative steps that don't produce a dataset on their own. | Individual pipeline methods. |
 | **Definitions** | The single object that lists everything Dagster knows about your project (assets, jobs, schedules, resources). Loaded from `workspace.yaml`. | `scrapy.cfg` pointing at your project. |
 
 ---
@@ -35,9 +34,7 @@ orchestrator/
     │   ├── scrape_job.py       ← runs landing_zone only
     │   ├── transform_job.py    ← runs processed_zone only
     │   └── full_pipeline_job.py← runs landing_zone then processed_zone
-    ├── schedules/
-    │   └── monthly_schedule.py ← fires full_pipeline_job on the 1st of each month
-    └── ops/                    ← lower-level building blocks (used by jobs)
+    └── schedules/              ← (empty — no active schedules)
 workspace.yaml                  ← tells Dagster where to find definitions.py
 dagster.yaml                    ← instance config (SQLite storage path, launchers)
 ```
@@ -129,21 +126,6 @@ dagster job execute \
   -c '{"ops": {}}' \
   --partition 2024-01-01
 ```
-
----
-
-## The monthly schedule
-
-The schedule `monthly_full_pipeline` fires at **02:00 UTC on the 1st of each
-month**. It automatically picks the *previous* month as the partition key, so
-on 1 Feb it scrapes all of January.
-
-Schedules only run when the **Dagster daemon** is running. `dagster dev` starts
-the daemon for you. In production you would run the daemon as a separate
-process alongside the web server.
-
-To toggle the schedule on/off: **Automation** → find `monthly_full_pipeline`
-→ toggle the switch.
 
 ---
 

@@ -7,7 +7,7 @@ from typing import Iterator
 
 from dagster import MultiPartitionKey, RunRequest, ScheduleEvaluationContext, schedule
 
-from orchestrator.dagster_project.assets.landing_zone import _BODIES
+from app.constants import ALL_BODY_NAMES
 from orchestrator.dagster_project.jobs.full_pipeline_job import full_pipeline_job
 
 
@@ -36,7 +36,7 @@ def monthly_schedule(context: ScheduleEvaluationContext) -> Iterator[RunRequest]
 
     month_key = f"{prev_year}-{prev_month:02d}-01"
 
-    for body in _BODIES:
+    for body in ALL_BODY_NAMES:
         partition_key = MultiPartitionKey({"body": body, "month": month_key})
         yield RunRequest(
             run_key=f"{month_key}|{body}",
