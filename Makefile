@@ -6,7 +6,7 @@ ifneq (,$(wildcard .env))
 endif
 
 .PHONY: install up down restart logs scrape transform dagster-dev \
-        test test-unit test-integration bootstrap reset-db reset-db-confirm help
+        test test-unit test-integration reset-db reset-db-confirm help
 
 # ── Help ──────────────────────────────────────────────────────────────────────
 help:
@@ -19,7 +19,6 @@ help:
 	@echo "  down             Stop containers"
 	@echo "  restart          Stop then start containers"
 	@echo "  logs             Tail container logs"
-	@echo "  bootstrap        Check connectivity to MongoDB and MinIO"
 	@echo "  reset-db         Show reset warning"
 	@echo "  reset-db-confirm Wipe all data and restart containers (destructive)"
 	@echo ""
@@ -57,9 +56,6 @@ restart: down up
 logs:
 	docker compose logs -f
 
-bootstrap:
-	PYTHONPATH=$(CURDIR) poetry run python scripts/bootstrap_dev.py
-
 reset-db:
 	@echo "WARNING: This will delete all data in MongoDB and MinIO."
 	@echo "Run 'make reset-db-confirm' to proceed."
@@ -87,8 +83,6 @@ endif
 		$(if $(BODIES),-a bodies="$(BODIES)",)
 
 # ── Transformation ────────────────────────────────────────────────────────────
-# The transform script uses the app/ layer (MongoDB, MinIO clients) so it needs
-# the project root on PYTHONPATH — this is the only place that's set.
 transform:
 ifndef START_MONTH
 	$(error START_MONTH is required. Usage: make transform START_MONTH=YYYY-MM END_MONTH=YYYY-MM)
@@ -96,7 +90,7 @@ endif
 ifndef END_MONTH
 	$(error END_MONTH is required. Usage: make transform START_MONTH=YYYY-MM END_MONTH=YYYY-MM)
 endif
-	PYTHONPATH=$(CURDIR) poetry run python scripts/run_transform.py \
+	PYTHONPATH=$(CURDIR) poetry run python -m app.services.transformation_service \
 		--start-date "$(START_MONTH)" \
 		--end-date "$(END_MONTH)"
 
